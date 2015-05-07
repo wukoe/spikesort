@@ -46,10 +46,10 @@ paras.bSpkFeatureOL=true; % whether to filter out spike feature outlier.
 paras.cluMinSpkThres=30; % cluster number minimum (用绝对数量而非spiking rate来定义)
 paras.feaDim=3;% Spike feature
 paras.bDrawForCluster=true;
-paras.drawNum=1000;
+paras.drawNum=2000;
 paras.cluMethod='kmeans';
 paras.bMatchNoisySpk=true;
-paras.SNratioThres_noise=8;
+paras.SNratioThres_noise=4;
 paras.bTimeShiftMerge=true;
 paras.lagWin=[-0.5,0.5]; % shift merging's maximum range (ms)
 paras.ccThres=0.8;%0.91; %<<< cluster mean curve correlation threshold 0.85
@@ -288,7 +288,7 @@ if runFlag(funcNumTab.merge)
     % delete extra SA too
     outfile2.SA=outfile2.rawSA;
     for chi=1:outfile2.info.rawchAmt
-        I=(rmlist{chi}>0);
+        I=rmlist{chi};
         outfile2.SA{chi}(I)=[];
     end
     % Save
@@ -315,6 +315,10 @@ if runFlag(funcNumTab.spikeAlign)
     if ~exist('outfile2','var')
         outfile2=load(fnS);
     end    
+    if ~isfield(outfile2,'SD')
+        outfile2.SD=outfile2.rawSD;
+        outfile2.SA=outfile2.rawSA;
+    end
     
     disp('spike alignment >>>');
     %%% Remove low activity channels and save results as SD
@@ -371,27 +375,29 @@ if runFlag(funcNumTab.cluster)
     
     %%% 生成新的NSD（每个分开的"神经元"算一个通道）and new chID and chAmt.
     assert(isequal(cellstat(reconSD,'length'),cellstat(CST,'length')),'reconSD and CSI length not match after clustering');
-    NSD=cell(0,1);
-    chID=zeros(0,1);
-    chcount=0;
-    for chi=1:info.rawchAmt
-        spkclu=reabylb(CST{chi});
-        % only choose non-noise channel
-        nzI=find(spkclu.types>0);  na=length(nzI);
-        if na>0
-            temp=cell(na,1);
-            for k=1:length(nzI)
-                I=spkclu.ids{nzI(k)};
-                temp{k}=reconSD{chi}(I);
-            end
-            NSD(chcount+1:chcount+na,1)=temp;
-            chID(chcount+1:chcount+na,1)=chi;
-            chcount=chcount+na;
-        end
-    end
-    info.chID=chID;
-    info.chAmt=chcount;
-    
+%     NSD=cell(0,1);
+%     chID=zeros(0,1);
+%     chcount=0;
+%     for chi=1:info.rawchAmt
+%         spkclu=reabylb(CST{chi});
+%         % only choose non-noise channel
+%         nzI=find(spkclu.types>0);  na=length(nzI);
+%         if na>0
+%             temp=cell(na,1);
+%             for k=1:length(nzI)
+%                 I=spkclu.ids{nzI(k)};
+%                 temp{k}=reconSD{chi}(I);
+%             end
+%             NSD(chcount+1:chcount+na,1)=temp;
+%             chID(chcount+1:chcount+na,1)=chi;
+%             chcount=chcount+na;
+%         end
+%     end
+%     info.chID=chID;
+%     info.chAmt=chcount;
+    [NSD,info.chID]=getNSD(reconSD,CST,info);
+    info.chAmt=length(info.chID);
+
 %     % Add amplitude of NSD (NSA), for use in spike merge.
 %     NSA=cell(info.chAmt,1);
 %     for chi=1:info.chAmt

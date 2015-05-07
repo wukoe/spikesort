@@ -3,7 +3,7 @@
 % seq and seqCS is of one specific sequence. e.g. seq=[3,10],
 % seqCS=[seqcount X 2]
 % * seq and seqCS. should be from ST converted from same SD here. 
-function repseq_spk_morph(X,SD,SDchID,seq,seqCS)
+function dx=repseq_spk_morph(X,SD,SDchID,seq,seqCS)
 prewin=10; postwin=20;
 
 seqlen=length(seq);

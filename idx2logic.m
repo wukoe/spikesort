@@ -1,22 +1,32 @@
 % SD=idx2logic(SI)
 % SD=idx2logic(SI,dlen)
+% SD=idx2logic(SI,dlen,interval)
 function SD=idx2logic(SI,varargin)
-
 cha=length(SI);
 
-% max of idx
-maxidx=max(cellstat(SI,'max'));
-if nargin==2
-    ptsAmt=varargin{1};
-    if ptsAmt<maxidx
-        error('the length can not hold biggest index number');
-    end    
+maxidx=max(cellstat(SI,'max')); % max index number of all channels
+if nargin>=2
+    if isempty(varargin{1})
+        ptsAmt=maxidx;
+    else
+        ptsAmt=varargin{1};
+        if ptsAmt<maxidx
+            error('the length can not hold biggest index number');
+        end    
+    end
+end
+if nargin==3
+    interval=varargin{2};
+    ptsAmt=ceil(ptsAmt/interval);
 else
-    ptsAmt=maxidx;
+    interval=1;
 end
 
 %
 SD=false(ptsAmt,cha);
-for chi=1:cha    
-    SD(SI{chi},chi)=true;
+for chi=1:cha
+    tp=ceil(SI{chi}/interval);
+    SD(tp,chi)=true;
+end
+
 end

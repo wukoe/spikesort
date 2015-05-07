@@ -277,9 +277,9 @@ end
                     % If clustered, ensure each cluster get a minimum
                     % number of curves.
                     if bCluster
-                        tp=min(nn,floor(plotNum/lb.cAmt));
-                        dispI=nidx(1:tp);
-                        for k=1:lb.cAmt
+                        tp=min(nn,floor(plotNum/lb.cAmt)); % number to show for each type on average
+                        dispI=nidx(1:tp); % first include the noise spikes
+                        for k=1:lb.cAmt % then append to valide spikes (ensure everyone have enough number counted in)
                             tp=min(lb.typeAmt(k),floor(plotNum/lb.cAmt));
                             dispI=[dispI;lb.ids{k}(1:tp)];
                         end
@@ -343,7 +343,7 @@ end
         end
     end
 
-end
+end % end of main
 
 %%%  obsolete
 %                     for si=1:plotNum

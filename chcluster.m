@@ -109,53 +109,7 @@ for chi=1:chAmt
         
         % * 下面这个部分现在的策略是将其置为0，后面和噪声spike共同决定归属。 
         % 另外一个方法是：维持此处独立的template matching, 但把前面抽取的步骤放到outlier detech之后。
-%         %%% Decide cluster identity of those left-aside spikes not drawn 
-%         if flagDoDraw
-%             % Make spike morphology templates out of clusters
-%             tplb=reabylb(tpCSI);
-%             % find non-0 types
-%             idx=find(tplb.types==0,1);
-%             if ~isempty(idx)
-%                 tplb.types(idx)=[];
-%                 tplb.typeAmt(idx)=[];
-%                 tplb.ids(idx)=[];
-%                 tplb.cAmt=tplb.cAmt-1;
-%             end
-%             if tplb.cAmt>0
-%                 spktemplate=zeros(info.spklen,tplb.cAmt);
-%                 for k=1:tplb.cAmt
-%                     spktemplate(:,k)=mean(Ach(:,tplb.ids{k}),2);
-%                 end
-%             end
-%             
-%             % Fit to template
-%             if tplb.cAmt>0
-%                 rAmt=size(leftAch,2);
-%                 restCSI=zeros(rAmt,1);
-%                 for k=1:rAmt
-%                     % Distance to all templates.
-%                     D=zeros(tplb.cAmt,1); S=D;
-%                     for m=1:tplb.cAmt
-%                         % average difference (as difference)
-%                         D(m)=mean(abs(leftAch(:,k)-spktemplate(:,m)));
-%                         % amplitude of signals (max amplitude of two curves) -
-%                         % measure "signal' in SNR
-%                         tp=[leftAch(:,k),spktemplate(:,m)];
-%                         S(m)=max(max(tp)-min(tp));
-%                     end
-%                     
-%                     % Find Most qualified template.
-%                     R=D./S; % difference/signal amplitude ratio
-%                     [tp,idx]=min(R);
-%                     if tp<1/paras.SNratioThres
-%                         restCSI(k)=tplb.types(idx);
-%                     else
-%                         restCSI(k)=0;
-%                     end
-%                 end
-%             end
-%         end
-        
+
         %%% Add the cluster back to data along outliers.        
         % Put back to temp alongside SF outlier
         temp=zeros(size(SF{chi},1),1);
