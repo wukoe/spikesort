@@ -1,8 +1,8 @@
 % spike detection algorithm
-%   [SD,SQ,SA]=spikedetect(X,srate) 
+%   [SD,SQ,SA]=spike_detect(X,srate,paras) 
 % output the spike data SD (logical format{0,1} symbol), quality and
 % amplitude of spikes (SA).
-%   [SD,SQ,SA,rawSQ]=spikedetect(...), give raw SQ before filtering.
+%   [SD,SQ,SA,rawSQ]=spike_detect(...), give raw SQ before filtering.
 % SQ= detection quality information {channel}logical[spikeAmt,2]
 % FALSE: normal; bit1 TRUE: too close to the previous spike; bit2 TRUE: over-threshold "plateau" too wide; 
 % 4: low amplitude?

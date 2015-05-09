@@ -47,6 +47,10 @@ for chi=1:chAmt
                     end
                 end
             end
+            % exit other channels if bin sd is already empty.
+            if isempty(SD{chi})
+                break
+            end
         end
     end
     fprintf('|');

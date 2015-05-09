@@ -41,6 +41,7 @@ paras.bExactST=false;
 % Spike cluster
 paras.bPNSep=true; % whether to separate the positive and negative peaks to separate channels first.
 % *this option is related to feature selection and clustering.
+% Test found that it's bad to set it as false!!
 paras.bSpkShapeOL=true; % whether to filter out spike shape outlier.
 paras.bSpkFeatureOL=true; % whether to filter out spike feature outlier.
 paras.cluMinSpkThres=30; % cluster number minimum (用绝对数量而非spiking rate来定义)
@@ -190,24 +191,18 @@ if runFlag(funcNumTab.filt)
     % Set up input
     [nsresult, infile1] = ns_OpenFile(fnRaw);
     if nsresult==-1,     error('open .mcd file error'); end
-    % Set up output
-    if bDirectMem
-        outfile1=struct('X',[],'T',[]);
-    else
-        outfile1=matfile(fnF,'Writable',true);
-    end
     
     disp('filt >>>');
     % Get filter
     [paras.fb,paras.fa]=butter(4,paras.spkFiltFreq/(info.srate/2));
     
     % add time points data
-    outfile1.T=(1:info.ptsAmt)'/info.srate; % measured in (s)
+    FtT=(1:info.ptsAmt)'/info.srate; % measured in (s)
     
     %%% Do the filtering
-    outfile1.X=zeros(info.ptsAmt,info.chAmt);
+    FtX=zeros(info.ptsAmt,info.chAmt);
     rmMark=false(info.chAmt,1); % marking bad channels
-    for chi=1:info.chAmt
+    for chi=1:info.chAmt  %%<<< parfor注意
         [~,~,temp]=ns_GetAnalogData(infile1,info.dataChEntity(chi),1,info.ptsAmt);
         temp=filtfilt(paras.fb,paras.fa,temp);
         
@@ -216,7 +211,7 @@ if runFlag(funcNumTab.filt)
             rmMark(chi)=true;
             fprintf('X');
         else
-            outfile1.X(:,chi)=temp;
+            FtX(:,chi)=temp;
             fprintf('|');
         end
     end
@@ -224,20 +219,19 @@ if runFlag(funcNumTab.filt)
     
     % Remove noisy channel of X if any
     if sum(rmMark)>0
-        % outfile1.X(:,rmMark)=[];        
+        % FtX(:,rmMark)=[];        
         % Update info
         info.badChannel=rmMark;
         % info.chAmt=info.chAmt-sum(rmMark);
     end
     
     ns_CloseFile(infile1); 
-    outfile1.info=info;   
     disp('filtering done'); % 结束后报喜
     
     %%% #S Save the filtering output data if runs in direct memory mode    
     if paras.bSaveFiltSignal && bDirectMem
         disp('saving filtered X ...');        
-        save(fnF,'-v7.3','-struct','outfile1'); %
+        save(fnF,'-v7.3','FtX','FtT','info'); %
         disp('saving done.');
     end
 end
@@ -247,17 +241,15 @@ end
 if runFlag(funcNumTab.spikeDetect)
     % Set up input - if no filtered data (outfile1) in memory, try load it.
     loadoutfile1();
+    load(fnF,'info'); %info=outfile1.info;
     % Set up output
     outfile2=struct();    
     
-    disp('spike detect >>>');
-    info=outfile1.info;
+    disp('spike detect >>>');    
     rawSD=cell(info.rawchAmt,1);
-    rawSQ=cell(info.rawchAmt,1);
-    rawSA=cell(info.rawchAmt,1); rawSW=rawSA;
-    for k=1:info.rawchAmt
-        chi=info.chID(k);
-        [rawSD{chi},rawSQ{chi},rawSA{chi},rawSW{chi}]=spike_detect(outfile1.X(:,chi),info.srate,paras);
+    rawSQ=rawSD; rawSA=rawSD; rawSW=rawSD;
+    parfor chi=1:info.rawchAmt
+        [rawSD{chi},rawSQ{chi},rawSA{chi},rawSW{chi}]=spike_detect(FtX(:,chi),info.srate,paras);
         fprintf('|');
     end
     fprintf('\n');
@@ -298,9 +290,9 @@ if runFlag(funcNumTab.merge)
     %%% Save the ST form of spike_detect too. 
     loadoutfile1();
     if paras.bExactST % Get Precise time by splining spike peaks.        
-        SDT=exactST(outfile1.X,outfile2.SD,outfile1.T,info.srate,info.chID);
+        SDT=exactST(FtX,outfile2.SD,FtT,info.srate,info.chID);
     else
-        SDT=idx2time(outfile2.SD,outfile1.T);
+        SDT=idx2time(outfile2.SD,FtT);
     end
     SDTchID=info.chID;
     save(fnST,'SDT','SDTchID');
@@ -330,7 +322,7 @@ if runFlag(funcNumTab.spikeAlign)
     info.chID=info.chID(I);
     
     %%% Spike alignment
-    [A,rmlist,SO]=spike_align(outfile1.X,SD,info.srate,'chAssign',info.chID,'window',paras.alignWin,'bSmooth',paras.bAlignSmooth);
+    [A,rmlist,SO]=spike_align(FtX,SD,info.srate,'chAssign',info.chID,'window',paras.alignWin,'bSmooth',paras.bAlignSmooth);
     % 消除窗口无法覆盖的边缘spike，同步更新SD,SA,SQ等信息。
     if ~isempty(rmlist)
         for k=size(rmlist,1):-1:1 % * must do it in reversed order
@@ -369,7 +361,7 @@ if runFlag(funcNumTab.cluster)
     for k=1:info.chAmt
         fprintf('|');
         chi=info.chID(k);
-        [CST{chi},reconSD{chi},reconA{chi}]=chcluster(outfile1.X(:,chi),outfile2.SD{k},outfile2.A{k},info,paras); % outfile2.SA{k},
+        [CST{chi},reconSD{chi},reconA{chi}]=chcluster(FtX(:,chi),outfile2.SD{k},outfile2.A{k},info,paras); % outfile2.SA{k},
     end
     fprintf('\n');
     
@@ -401,7 +393,7 @@ if runFlag(funcNumTab.cluster)
 %     % Add amplitude of NSD (NSA), for use in spike merge.
 %     NSA=cell(info.chAmt,1);
 %     for chi=1:info.chAmt
-%         NSA{chi}=outfile1.X(NSD{chi},info.chID(chi));
+%         NSA{chi}=FtX(NSD{chi},info.chID(chi));
 %     end
     
     % save
@@ -419,9 +411,9 @@ if runFlag(funcNumTab.cluster)
     
     % Remaining converted to ST
     if paras.bExactST % Get Precise time by splining spike peaks.
-        ST=exactST(outfile1.X,NSD,outfile1.T,info.srate,info.chID);
+        ST=exactST(FtX,NSD,FtT,info.srate,info.chID);
     else
-        ST=idx2time(NSD,outfile1.T);
+        ST=idx2time(NSD,FtT);
     end
     STchID=info.chID;
     save(fnST,'-append','ST','STchID','info');
@@ -436,13 +428,11 @@ disp('run finish, all done');
 
 %%%%%%%%%%%%%%% Load variable sub-functions
     function loadoutfile1()
-        if ~exist('outfile1','var')
+        if ~exist('FtX','var')
             fprintf('loading raw signal from %s\n',fnF);
-            if bDirectMem
-                outfile1=load(fnF);
-            else
-                outfile1=matfile(fnF);
-            end            
+            outfile1=load(fnF);
+            FtX=outfile1.FtX;
+            FtT=outfile1.FtT;
         end
     end
 

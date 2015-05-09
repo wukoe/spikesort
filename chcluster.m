@@ -48,10 +48,9 @@ end
 % if chAmt <<<
 sAmt=cellstat(SA,'length');
 
-SF=cell(chAmt,1);
 % Channel SI: cluster identity of each spike in each channel.
 CSI=cell(chAmt,1); % * note there may be 0 in CSI - detected as noise, not assigned to any cluster.
-for chi=1:chAmt
+parfor chi=1:chAmt
     Ach=newAL{chi};
     SAch=SA{chi};
 
@@ -92,18 +91,18 @@ for chi=1:chAmt
         % 添加Spike amplitude 信息！
         temp=[temp,SAch(spknol)];
         % Normalize
-        SF{chi,1}=zscore(temp);
+        sf=zscore(temp);
         
         %%% Clustering
         % Exclude SF outlier
         % * 注意如果outlier_detect放在取feature之后，则在进行time-shift
         % merge时应该对outlier同样进行分析并考虑重新加入下一轮feature selection，因为有可能feature上的少数派可能在实际上是位移造成的。
         if paras.bSpkFeatureOL
-            sfnol=~outlier_detect(SF{chi,1},1.1); % SF non-outlier
+            sfnol=~outlier_detect(sf,1.1); % SF non-outlier
         else
-            sfnol=true(size(SF{chi,1},1),1);
+            sfnol=true(size(sf,1),1);
         end
-        temp=SF{chi}(sfnol,:);        
+        temp=sf(sfnol,:);        
         % Clustering
         tpCSI=spike_cluster(temp,paras.cluMethod);
         
@@ -112,7 +111,7 @@ for chi=1:chAmt
 
         %%% Add the cluster back to data along outliers.        
         % Put back to temp alongside SF outlier
-        temp=zeros(size(SF{chi},1),1);
+        temp=zeros(size(sf,1),1);
         temp(sfnol)=tpCSI;
                 
         CSI{chi}=zeros(sAmt(chi),1);
@@ -204,7 +203,6 @@ end
 
 %%%%%%%%%%%%%% Whether to enter the spike time-shift merge stage
 if paras.bTimeShiftMerge 
-    SNratioThres_cm=15;%17;
     newSD=SD;
     spkclu=reabylb(CSI);
     
@@ -221,7 +219,7 @@ if paras.bTimeShiftMerge
     if spkclu.cAmt>1
         % * Get mean curve of each cluster (<<<不要在这里重新计算cm,因为之前已经把部分噪声spike加进来了）
 
-        %%% 计算每一对是否应该合并 - 找到最接近的那一对。
+        %%% 根据cm计算每一对是否应该合并 - 找到最接近的那一对。
         sameSpkMark=false(spkclu.cAmt); % mark whether 2 clusters (nominated by row and column) should merge.
         cc=zeros(spkclu.cAmt); % corr coef
         D=cc;
@@ -292,19 +290,13 @@ if paras.bTimeShiftMerge
                 end
             end
 
-            %%% Merge the "same spike" pair
+            %%% Merge the pair supposed to be "same spike"
             for m=1:spkclu.cAmt
                 movidx=find(MD(m,:));
                 if ~isempty(movidx)
                     movpts=ML(m,movidx); %movpts P/N property decide whether the data move forward/backward.
-%                     % Get more accurate move distance by matching the
-%                     % peaks.(No! matching peaks 不是最好的方法，因为即使是mean curve，peak往往也有对齐问题。)
-%                     peakloc=info.spkprew+1; % location of peak of spike data
-%                     tp=peakloc+movpts; tr=2;
-%                     [~,idx]=max(abs(cm(tp-tr:tp+tr,m)));
-%                     if idx~=tr+1 % if there's need to move.
-%                         movpts=movpts+(idx-tr-1);
-%                     end
+%                     % 之前尝试过Get more accurate move distance by matching the
+%                     % peaks.(结果：No! matching peaks 不是最好的方法，因为即使是mean curve，peak往往也有对齐问题。)
 
                     % 被移动者移动
                     if paras.bIndivMove %每个spike单独进行，cluster的距离作为限制搜索范围的参考
@@ -332,7 +324,7 @@ if paras.bTimeShiftMerge
                             end
                         end
 
-                    else % move in a batch.
+                    else % 整个类一起移动，移动同样的距离.
                         newSD(spkclu.ids{m})=newSD(spkclu.ids{m})+movpts;
                     end
                     

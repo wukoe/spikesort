@@ -132,7 +132,7 @@ switch method
     %%%%%%%%%%%%%%%% Based on network community detection
     % This could give number of clusters automatically.
     case 'graphcomm'
-        SI=netcluster(SF); 
+        SI=netcluster(SF,2); 
 end
 
 end
