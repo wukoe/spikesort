@@ -1,4 +1,5 @@
-% Y=sdmerge(x1,x2,x3,...)
+% Merge together multiple SD data sets, and order train by time.
+%   Y=sdmerge(x1,x2,x3,...)
 function Y=sdmerge(varargin)
 sa=nargin;
 if sa<=1
@@ -6,15 +7,20 @@ if sa<=1
     return
 end
 
+% Initialize
 Y=varargin{1};
 if iscell(Y)
     cha=length(Y);
+    % Append
     for si=2:sa
         for chi=1:cha
             Y{chi}=[Y{chi};varargin{si}{chi}];
-        end
+        end        
+    end
+    % Sort to right time order
+    for chi=1:cha
         if ~isempty(Y{chi})
-        Y{chi}=sort(Y{chi});
+            Y{chi}=sort(Y{chi},'ascend');
         end
     end
 else

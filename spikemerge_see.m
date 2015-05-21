@@ -6,8 +6,8 @@ function [ksnum,rnum,ksrnum]=spikemerge_see(X,SD,info)
 %%% Setting
 xcha=120;
 Rthr=2; % <<< partially tested
-KSthr=0.1;
-
+KSthr=0.15; % < based on data with outlier removal.
+ 
 ksnum=zeros(xcha,1);
 rnum=ksnum;
 ksrnum=ksnum;

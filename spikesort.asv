@@ -383,8 +383,7 @@ if runFlag(funcNumTab.merge)
     info=outfile3.info;
     
     disp('spike merge >>>');
-    ext=0.0005*info.srate;
-    [NSD,~,rmlist]=spikemerge(outfile3.NSD,outfile3.NSA,info,'ext',ext);
+    [NSD,~,rmlist]=spikemerge(outfile3.NSD,outfile3.NSA,info);
     
     % delete extra SA too  
     for chi=1:length(outfile3.NSA)
@@ -494,7 +493,7 @@ if runFlag(funcNumTab.toST)
     temp=cellstat(outfile3.NSD,'length');
     thr=paras.STactThre*info.TimeSpan;
     I=(temp>thr);
-    NSD=outfile3.NSD(I);
+    NSD=NSD(I);
     info.chID=info.chID(I);
     info.chAmt=length(info.chID);
     

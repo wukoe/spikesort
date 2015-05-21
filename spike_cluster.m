@@ -133,6 +133,9 @@ switch method
     % This could give number of clusters automatically.
     case 'graphcomm'
         SI=netcluster(SF,2); 
+        
+    case 'pointks'
+        SI=pointKS(SF',false); % bSpk=false
 end
 
 end

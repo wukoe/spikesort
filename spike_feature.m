@@ -1,8 +1,10 @@
 % Calculates the spike features - one channel
 %   spkfea = spike_feature(A,varargin)
 % A: each column as a spike, spikes stack up in row direction
-function spkfea = spike_feature(spikes,varargin)
+function [spkfea,O]= spike_feature(spikes,varargin)
 % Default
+runMode=1; % 1=learning features, 2=use features
+
 scales = 5;
 outDim = 3; % 10 for wavelet, pca will change it to 3
 spkn=size(spikes,2);
@@ -20,6 +22,10 @@ if ~isempty(varargin)
     % process the parameter options one by one
     for parai=1:length(pname)
         switch pname{parai}
+            case 'mode'
+                runMode=pinfo{parai};
+            case 'pararm'
+                param=pinfo{parai};
             case 'feature'
                 feature=pinfo{parai};
             case 'wltype'
@@ -31,7 +37,9 @@ if ~isempty(varargin)
         end
     end
 end
-
+if ~ismember(runMode,[1,2])
+    error('runMode opt invalid');
+end
 
 %%% CALCULATES FEATURES
 switch feature
@@ -47,22 +55,28 @@ switch feature
         end
         
         % KS test for coefficient selection
-        sd=zeros(slen,1);
-        for pti=1:slen
-            thr_dist = std(cc(pti,:)) * 3;
-            thr_dist_min = mean(cc(pti,:)) - thr_dist;
-            thr_dist_max = mean(cc(pti,:)) + thr_dist;
-            % find the under-threshold
-            aux = cc(pti,(cc(pti,:)>thr_dist_min & cc(pti,:)<thr_dist_max));
-            
-            if length(aux) > 10; % as standard to rule out the single model point                
-                sd(pti)=test_ks(aux);
-            else
-                sd(pti)=0;
+        if runMode==1
+            sd=zeros(slen,1);
+            for pti=1:slen
+                thr_dist = std(cc(pti,:)) * 3;
+                thr_dist_min = mean(cc(pti,:)) - thr_dist;
+                thr_dist_max = mean(cc(pti,:)) + thr_dist;
+                % find the under-threshold
+                aux = cc(pti,(cc(pti,:)>thr_dist_min & cc(pti,:)<thr_dist_max));
+                
+                if length(aux) > 10; % as standard to rule out the single model point
+                    sd(pti)=test_ks(aux);
+                else
+                    sd(pti)=0;
+                end
             end
+            [~,idx]=sort(sd,'descend');
+        else
+            idx=param.selectFeaI;
         end
-        [~,idx]=sort(sd,'descend');
         spkfea=cc(idx(1:outDim),:)';
+        
+        O.selectFeaI=idx;
         
     case 'cwt'
         % Continuous wavelet coefficient method

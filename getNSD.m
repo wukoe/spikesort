@@ -1,8 +1,9 @@
-function [NSD,chID]=getNSD(reconSD,CST,info)
+% [NSD,chID]=getNSD(reconSD,CST)
+function [NSD,chID]=getNSD(reconSD,CST)
 NSD=cell(0,1);
 chID=zeros(0,1);
 chcount=0;
-for chi=1:info.rawchAmt
+for chi=1:length(reconSD)
     spkclu=reabylb(CST{chi});
     % only choose non-noise channel
     nzI=find(spkclu.types>0);  na=length(nzI);
@@ -17,6 +18,5 @@ for chi=1:info.rawchAmt
         chcount=chcount+na;
     end
 end
-info.chID=chID;
 
 end

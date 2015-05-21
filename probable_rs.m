@@ -47,7 +47,11 @@ for k=1:nl
     if N(k)>spkAmt(1)
         p(k)=0;
     else
-        p(k)=rT^N(k)*exp(-rT)/prod(1:N(k));
+        if N>50 % Use Stirling's approaximation
+            p(k)=exp(-rT)*(exp(1)*rT/N(k))^N(k)/sqrt(2*pi*N(k));
+        else
+            p(k)=rT^N(k)*exp(-rT)/prod(1:N(k));
+        end
     end
 end
 

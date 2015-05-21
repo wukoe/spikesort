@@ -1,11 +1,16 @@
 % process the several steps of spikesort. (align, split, clustering,...)
-%   [CSI,SD,AL]=chcluster(X,SD,AL,info,paras)
-function [CSI,SD,AL]=chcluster(X,SD,AL,info,paras) % make back later.
+%   [CSI,SD,AL]=chcluster(X,SD,info,paras)
+function [CSI,SD,AL]=chcluster(X,SD,info,paras) % make back later.
 roundnum=4;
 rawSD=SD;
 for round=1:roundnum
     SA=X(SD);
-    chAmt=1;    
+    chAmt=1;
+
+    % Get the new alignment data
+    AL=spike_align(X,{SD},info.srate,'window',paras.alignWin,'bSmooth',paras.bAlignSmooth); % * 用了reconSD, 就不需要'chAssign'选项了。
+    AL=AL{1};
+    
 %%% Splite the positive and negative spikes
 if paras.bPNSep
     newSD=cell(0);
@@ -38,11 +43,6 @@ else
     newAL={AL};
 end
 
-% %%% temporary for debug (only for the SO.spklen).
-% [AL,rmlist,SO]=spike_align(X,SD,info.srate,'chAssign',ones(chAmt,1),'window',paras.alignWin);
-% % Get spike morphology data length.
-% info.spklen=SO.spklen; 
-
 
 %%%%%%%%%%%%%%% Clutering each channel.
 % if chAmt <<<
@@ -50,7 +50,7 @@ sAmt=cellstat(SA,'length');
 
 % Channel SI: cluster identity of each spike in each channel.
 CSI=cell(chAmt,1); % * note there may be 0 in CSI - detected as noise, not assigned to any cluster.
-parfor chi=1:chAmt
+for chi=1:chAmt
     Ach=newAL{chi};
     SAch=SA{chi};
 
@@ -73,7 +73,7 @@ parfor chi=1:chAmt
 
     %%% Exclude spike shape outlier
     if paras.bSpkShapeOL
-        spknol=~outlier_detect(Ach',1.2);% spike non-outlier
+        spknol=~outlier_detect(Ach',1.5);% spike non-outlier
     else
         spknol=true(size(Ach,2),1);
     end
@@ -85,9 +85,9 @@ parfor chi=1:chAmt
         CSI{chi}(spknol)=1; % outlier spike标记为0
     else        
         %%% Feature extraction and selection        
-        temp=Ach(:,spknol);        
+        Ach=Ach(:,spknol);        
         % Feature extraction
-        temp=spike_feature(temp,'dim',paras.feaDim);
+        temp=spike_feature(Ach,'dim',paras.feaDim);
         % 添加Spike amplitude 信息！
         temp=[temp,SAch(spknol)];
         % Normalize
@@ -98,7 +98,7 @@ parfor chi=1:chAmt
         % * 注意如果outlier_detect放在取feature之后，则在进行time-shift
         % merge时应该对outlier同样进行分析并考虑重新加入下一轮feature selection，因为有可能feature上的少数派可能在实际上是位移造成的。
         if paras.bSpkFeatureOL
-            sfnol=~outlier_detect(sf,1.1); % SF non-outlier
+            sfnol=~outlier_detect(sf,1.5); %1.1 SF non-outlier
         else
             sfnol=true(size(sf,1),1);
         end
@@ -106,9 +106,43 @@ parfor chi=1:chAmt
         % Clustering
         tpCSI=spike_cluster(temp,paras.cluMethod);
         
-        % * 下面这个部分现在的策略是将其置为0，后面和噪声spike共同决定归属。 
+        %%% Use point KS to further separate        
+        if paras.bFineCluster
+            spkclu=reabylb(tpCSI);
+            nidx=find(spkclu.types==0,1);
+            % 排除噪声选项
+            if ~isempty(nidx)
+                spkclu.types(nidx)=[];
+                spkclu.typeAmt(nidx)=[];
+                spkclu.cAmt=spkclu.cAmt-1;
+                spkclu.ids(nidx)=[];
+            end
+            % 1/2 pointKS for the spike morphology
+            temp=Ach(:,sfnol);
+            % 2/2 pointKS for the spike feature
+%             temp=temp';
+            % e/2
+            for ci=1:spkclu.cAmt % 对每一类进行细分
+                tp=pointKS(temp(:,spkclu.ids{ci}),true); % bSpk=true;
+                % 若tp表示多于一类
+                lb=reabylb(tp);
+                if lb.cAmt>1
+                    newtpCSI=tpCSI(spkclu.ids{ci});
+                    maxExistLb=max(tpCSI);
+                    for k=2:lb.cAmt
+                        newtpCSI(lb.ids{k})=maxExistLb+1;
+                        maxExistLb=maxExistLb+1;
+                    end
+                    tpCSI(spkclu.ids{ci})=newtpCSI;
+                end
+            end               
+            
+            % 是否加入一个将数量较少的类别移除的工作？ <<<<<
+        end
+            
+        
+        % * 下面这个部分主要将分类完的lb放入完整的lb序列，现在的策略是将未被抽中者置为0，后面和噪声spike共同决定归属。 
         % 另外一个方法是：维持此处独立的template matching, 但把前面抽取的步骤放到outlier detech之后。
-
         %%% Add the cluster back to data along outliers.        
         % Put back to temp alongside SF outlier
         temp=zeros(size(sf,1),1);
@@ -336,12 +370,7 @@ if paras.bTimeShiftMerge
     end
 
     %%% Update those unsorted spike timing information as well.
-    SD=newSD;
-    if round<roundnum % >>> chi<chAmt ??
-        % Update to get the new alignment data
-        AL=spike_align(X,{SD},info.srate,'window',paras.alignWin,'bSmooth',paras.bAlignSmooth); % * 用了reconSD, 就不需要'chAssign'选项了。
-        AL=AL{1};
-    end
+    SD=newSD;    
 end
 
 
