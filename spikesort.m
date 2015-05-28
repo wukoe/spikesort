@@ -358,11 +358,11 @@ if runFlag(funcNumTab.cluster)
     info.chAmt=length(info.chID);
 
     % Add amplitude of NSD (NSA), for use in spike merge.
-    outfile3.NSA=cell(info.chAmt,1);
+    outfile3.NSA0=cell(info.chAmt,1);
     for chi=1:info.chAmt
-        outfile3.NSA{chi}=X(NSD{chi},info.chID(chi));
+        outfile3.NSA0{chi}=X(NSD{chi},info.chID(chi));
     end
-    outfile3.NSD=NSD;
+    outfile3.NSD0=NSD;
     outfile3.info=info;
     outfile3.paras=paras;
     
@@ -384,19 +384,8 @@ if runFlag(funcNumTab.merge)
     
     disp('spike merge >>>');
     ext=0.0005*info.srate;
-    [NSD,~,rmlist]=spikemerge(outfile3.NSD,outfile3.NSA,info,'ext',ext);
-    
-    % delete extra SA too  
-    for chi=1:length(outfile3.NSA)
-        I=rmlist{chi};
-        outfile3.NSA{chi}(I)=[];
-    end
-    
-%     % Delete any 0 spike channels
-%     sa=cellstat(NSD,'length');
-%     I=(sa>0);
-%     NSD=NSD(I);    NSA=NSA(I);
-%     info.chID=info.chID(I);    info.chAmt=length(info.chID);
+    tp=info.TimeSpan*info.srate;
+    [NSD,outfile3.csmark,outfile3.csrm]=spikemerge(outfile3.NSD0,outfile3.NSA0,info,'ext',ext,'time span',tp);
     
     % 需要将NSD重新组合成reconSD以利于2nd clustering 或 display.
     reconSD=cell(info.rawchAmt,1);
@@ -417,10 +406,9 @@ if runFlag(funcNumTab.merge)
     temp=(1:info.rawchAmt)';
     info.chID=temp(I);    info.chAmt=length(info.chID);
     
+    % Save
     outfile3.reconSD=reconSD;
     outfile3.info=info;
-    
-    % Save
 %     save(fnC,'-struct','outfile3');
     disp('merging done');
 end

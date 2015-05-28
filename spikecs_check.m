@@ -1,18 +1,24 @@
-% analyze the info from spikemerge.m
-%   [ksnum,rnum,ksrnum]=spikemerge_see(X,SD,info)
-function [ksnum,rnum,ksrnum]=spikemerge_see(X,SD,info)
+% analyze the info from spikemerge() and spikecs().
+% purpose: whether there's false positive channels in the CS seqs. Checking
+% on raw data is the main method.
+%   [stat,IKS1,IKS2,IR]=spikecs_check(X,SD,info)
+function [stat,IKS1,IKS2,IR]=spikecs_check(X,SD,info)
 % Find the space range of each cluster (- the real "range" by 查看所有通道中出现aligned
 % spike的情况。如果两个cluster其实是同一个，这个方法可以更准确地把这个找出来。
 %%% Setting
 xcha=120;
-Rthr=2; % <<< partially tested
-KSthr=0.15; % < based on data with outlier removal.
- 
+Rthr=2; % SNR thres <<< partially tested
+KSthr1=0.2; % < based on data with outlier removed.
+KSthr2=0.15;
+
+sda=length(SD);
+
+IKS1=false(xcha,sda);
+IKS2=IKS1; IR=IKS1;
 ksnum=zeros(xcha,1);
-rnum=ksnum;
-ksrnum=ksnum;
-for chi=1:xcha
-    if length(SD{chi})<6
+rnum=ksnum; ksrnum=ksnum;
+for chi=1:sda
+    if length(SD{chi})<0.1*info.TimeSpan
         rnum(chi)=0;
         ksnum(chi)=0;
         ksrnum(chi)=0;
@@ -33,32 +39,37 @@ for chi=1:xcha
         % 看A中各个通道的叠加的有无和类别数。
         R=ratioPeakNoise(A);
         
-        kst=zeros(xcha,1);
-        for chm=1:xcha
+        ksd=zeros(xcha,1);
+        parfor chm=1:xcha
             al=A{chm};
-            p=zeros(aLen,1);
-            parfor k=1:aLen
-                p(k)=test_ks(al(k,:));
-            end
-            
-            kst(chm)=max(p);
+            d=zeros(aLen,1);
+            for k=1:aLen
+                d(k)=test_ks(al(k,:));
+            end            
+            ksd(chm)=max(d);
         end
         
         % ID of channels over uni-model threshold
-        IKS=kst>KSthr;
+        IKS1(:,chi)=ksd>KSthr1;
+        IKS2(:,chi)=ksd>KSthr2;
         
         % ID of channels over exist-nonexist threshold
-        IR=R>Rthr;
+        IR(:,chi)=R>Rthr;
         
-        rnum(chi)=sum(IR);
-        ksnum(chi)=sum(IKS);
-        ksrnum(chi)=sum(IR&IKS);
+        rnum(chi)=sum(IR(:,chi));
+        ksnum(chi)=sum(IKS1(:,chi));
+        ksrnum(chi)=sum(IR(:,chi)&IKS1(:,chi));
         fprintf('|');
     end
 end
+
+stat.rnum=rnum;
+stat.ksnum=ksnum;
+stat.ksrnum=ksrnum;
 end % of main
 
 
+%%%%%%%%%%%%%%%
 function R=ratioPeakNoise(A)
 aa=cellstat(A,'size',2);
 idx=find(aa>0,1); alen=size(A{idx},1);

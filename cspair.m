@@ -5,6 +5,11 @@ function [Iw,Isd,num]=cspair(marksd,ST,ext)
 marklen=length(marksd);
 cha=length(ST);
 
+if marklen==0
+    Iw=[]; Isd=cell(cha,1); num=zeros(1,cha);
+    return
+end
+
 wd=[marksd-ext,marksd+ext];
 Iw=false(marklen,cha);
 Isd=cell(cha,1);
@@ -13,6 +18,6 @@ for chi=1:cha
     Iw(:,chi)=(BA>0);
     Isd{chi}=(BI>0);
 end
-num=sum(Iw);
+num=sum(Iw,1);
 
 end

@@ -1,5 +1,5 @@
 % Delete the duplicates from conduction signal
-%   [newST,marklb,rmlb]=spikemerge(ST,info,SA)
+%   [newST,marklb,rmlb]=spikemerge(ST,SA,info)
 % options:
 % 'ext'=0.0005 (s)
 % 'auto thres'=true
@@ -7,8 +7,10 @@ function [ST,marklb,rmlb]=spikemerge(ST,SA,info,varargin)
 % Standard to find cluster sequence.
 ext=0.0005; %0.5/0.25ms
 % optSelect=2; % way to determine the representative of the cluster
-bAutoThres=false; % whether use algorithm-determined adaptive threshold for pair number.
+bAutoThres=true; % whether use algorithm-determined adaptive threshold for pair number.
 minThres=4/60*info.TimeSpan; % static threshold if chosen to use.
+flagUserTimeSpan=false;
+bRmInt=false;
 
 if ~isempty(varargin)
     [pname,pinfo]=paramoption(varargin{:});
@@ -17,8 +19,9 @@ if ~isempty(varargin)
         switch pname{parai}
             case 'ext'
                 ext=pinfo{parai};
-%             case 'total'
-%                 totaltimelimit=pinfo{parai};
+            case 'time span'
+                timeSpan=pinfo{parai};
+                flagUserTimeSpan=true;
             case 'auto thres'
                 bAutoThres=pinfo{parai};
             otherwise
@@ -27,12 +30,24 @@ if ~isempty(varargin)
     end
 end
 
-% Process
+%%% Process
 chAmt=length(ST);
 % Get number of firing in each channel
 sAmt=cellstat(ST,'length');
 % Check number of SD SA
 assert(isequal(sAmt,cellstat(SA,'length')),'merging: SD and SA number not equal');
+
+if ~flagUserTimeSpan
+    if bRmInt        
+        % First remove the large "empty" segments of firing segments
+        % (most typical case: the inter-burst interval)
+        for chi=1:chAmt
+            bl=burstlet(ST{chi});
+        end
+    else
+        timeSpan=max(cellstat(ST,'max'))-min(cellstat(ST,'min'));
+    end
+end
 
 %%% Identify the spikes involved in conduction signal.
 % Initialize the markers (Spike remain/delete, etc).
@@ -50,6 +65,10 @@ for chi=1:chAmt
         if length(ST{chi})<minThres
             continue
         end
+    else
+        if length(ST{chi})<3
+            continue
+        end
     end
     
     % Find all tight-following spikes (under ext) in the channel pairs
@@ -61,11 +80,16 @@ for chi=1:chAmt
         sdnum=length(Isd);
         ts=sAmt(chi+1:end);
         foI=false(sdnum,1);
-        for m=1:sdnum
-            P=probable_rs(info.TimeSpan,[sAmt(chi),ts(m)],ext,rnum(m));
+        for m=1:sdnum            
+            [P,expectnum]=probable_rs(timeSpan,[sAmt(chi),ts(m)],ext,rnum(m));
             % * when 2ch have spike 10000&1000, expect~30; when have
             % 10000&10000, expect~300-400.
-            if P<pthr
+            if isnan(P)
+                error('check this out: P calculation numeric problem');
+            end
+            if rnum(m)>expectnum && P<pthr 
+                % 第一个条件是为了保证P足够小的原因是因为rnum位于概率分布峰值的另一侧（数量大大超过随机模型下的预期），
+                % 而非相反（数量远小于预期）。
                 foI(m)=true;
             end            
         end
@@ -129,3 +153,21 @@ for chi=1:chAmt
 end
 
 end % of main
+
+%     if optSelect==1 % keep channel with maximum total firing.
+%         % percentage of repeats to each unit's total firing number
+%         P=stat.seqcount(seqi)./sAmt(seq);
+%         [~,idx]=max(P);
+%     else % keep channel with maximum spike amplitude.
+%         % Get amplitude of spikes in each channel (use only spikes participating current cluster,
+%         % remove possible artifact)
+%         sAmp=zeros(seqlen,1);
+%         for k=1:seqlen
+%             I=seqCS{seqi}(:,k);
+%             temp=abs(SA{seq(k)}(I));
+%             I=outlier_detect(temp);
+%             temp=temp(~I);
+%             sAmp(k)=mean(temp);
+%         end
+%         [~,idx]=max(sAmp);
+%     end

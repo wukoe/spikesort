@@ -5,11 +5,11 @@
 % means seq length of 2, etc.
 % intv: interval length (s)
 % N is specified number of repeats.
-function P=probable_rs(totaltime,spkAmt,intv,N)
+function [P,rT]=probable_rs(totaltime,spkAmt,intv,N)
 seqlen=length(spkAmt); % = number of channels participating.
 
 if seqlen==2
-    P=prob_sl2(totaltime,spkAmt,intv,N);
+    [P,rT]=prob_sl2(totaltime,spkAmt,intv,N);
 else
     ER=0:50; % the last one should be 1
     ERlen=length(ER);
@@ -27,6 +27,7 @@ else
         P=sum(EP);
     end
     P=P(N+1);
+    rT=Nan; % <<<<<
 end
 
 end % main
@@ -34,7 +35,7 @@ end % main
 
 %%%%%%%%%%%%%% 
 % Probability of seq length of 2.
-function p=prob_sl2(totaltime,spkAmt,intv,N)
+function [p,rT]=prob_sl2(totaltime,spkAmt,intv,N)
 nl=length(N);
 % Time length occupied by spikes of first channel.
 ot=spkAmt(1)*intv;

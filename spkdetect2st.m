@@ -112,25 +112,3 @@ for fi=1:fileAmt
 end
 
 end
-
-%
-% % Where to extract SD
-% flagS=false; flagC=false;
-% if strcmp(opt,'s')
-%     flagS=true;
-% %     fstr='_s.mat';
-%     fstr='_s.mat';
-% elseif strcmp(opt,'c')
-%     flagC=true;
-%     fstr='_c.mat';
-% elseif strcmp(opt,'cs') || strcmp(opt,'sc')
-%     flagS=true; flagC=true;
-%     fstr='_c.mat';
-% else
-%     error('invalid opt');
-% end
-
-%         obsolete for using A to exactST.
-%         load([fileName,'_s.mat'],'A','paras');
-%         mid=round(abs(paras.alignWin(1))*info.srate/1000);
-%         SDT=exactST(A,SD,T,info.srate,mid);
