@@ -101,52 +101,60 @@ for chi=1:chAmt
         continue
     end
     
+    % Leave only effective channels.
+    Ichi=Ichi(:,foI); Isd=Isd(foI); rnum=rnum(foI);
     % 对于每个通道的“following”spike，找各自的幅值。
     ampchi=zeros(foAmt,1);
     ampsd=ampchi;
     for fi=1:foAmt
-        idx=foI(fi);
         % itself
-        ampchi(fi)=mean(abs(SA{chi}(Ichi(:,idx))));
+        ampchi(fi)=mean(abs(SA{chi}(Ichi(:,fi))));
         % conducters
-        ampsd(fi)=mean(abs(SA{idx+chi}(Isd{idx})));
+        ampsd(fi)=mean(abs(SA{foI(fi)+chi}(Isd{fi})));
     end    
-    % 排序各个ampchi并改变对应的ampsd和foI
-    [ampchi,ampI]=sort(ampchi,'descend');
-    ampsd=ampsd(ampI);
-    foI=foI(ampI); 
-    Ichi=Ichi(:,foI); Isd=Isd(foI); rnum=rnum(foI);    
+%     % 排序各个ampchi并改变对应的ampsd和foI
+%     [ampchi,ampI]=sort(ampchi,'descend');
+%     ampsd=ampsd(ampI);
+%     foI=foI(ampI); 
+%     Ichi=Ichi(:,ampI); Isd=Isd(ampI); rnum=rnum(ampI);
     for fi=1:foAmt
-        if ampchi(fi)>ampsd(fi) %则保留chi            
-            % 下面这个部分的目的是根据chi中被关联的spike群体中已分配/未分配的比例决定是否将这些找到的视为单独的群体。
-            % 但这一想法面临detection缺陷的挑战，目前暂时无视。
-%             tp=cslb{chi}(Ichi(:,fi)); %获得这个conduction的cslb
-%             nU=sum(tp==0); % 未分配的spike个数
-%             % 接下来获取所有已分配者里面数量最多的cslb的spike的数量
-%             tp(tp==0)=[];
-%             lb=reabylb(tp);
-%             [nE,idx]=max(lb.typeAmt);
-%             existlb=lb.types(idx);
-%             % 获取existlb类在所有chi通道spike里面的数量
-%             nEall=sum(cslb{chi}==existlb);            
-%             % 接下来按数量比例决定new lb
-%             if nE>nEall*0.9 % 将全部nE化为
-%             end
-
+        % Comparing rule
+        % if the amplitude difference is larger than 1.25 times of the
+        % other, select by larger amplitude; else if the amplitude
+        % difference is not large enough, select by more total spike number
+        % (also only suitable for sorted data).
+        % * 若完全根据chi中被关联的spike群体中已分配/未分配的比例决定是否将这些找到的视为单独的群体，
+        % 面临detection缺陷的挑战。
+        if ampchi(fi)>ampsd(fi)*1.25 || ampsd(fi)>ampchi(fi)*1.25
+            if ampchi(fi)>ampsd(fi)
+                flagKeepchi=true;
+            else
+                flagKeepchi=false;
+            end
+        else
+            %
+            if sAmt(chi)>sAmt(foI(fi)+chi)
+                flagKeepchi=true;
+            else
+                flagKeepchi=false;
+            end
+        end
+        
+        if  flagKeepchi %则保留chi
             % mark the "marker" spikes
             marklb{chi}(Ichi(:,fi))=1;            
             % 标记要删除的sd(fi)
             rmlb{foI(fi)+chi}(Isd{fi})=true;
         else
-            rmlb{chi}(Ichi(:,fi))=true;            
             marklb{foI(fi)+chi}(Isd{fi})=1;
+            rmlb{chi}(Ichi(:,fi))=true;
         end
     end
     fprintf('|');
 end
 fprintf('\n');
 
-%%% Delete from the spike train & representative identity mark lb
+%%% Delete from the spike train & label of representative identity marker
 for chi=1:chAmt
     ST{chi}(rmlb{chi})=[];
     marklb{chi}(rmlb{chi})=0;

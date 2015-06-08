@@ -1,6 +1,6 @@
 % exact time of spike peaks.
-%   ST=exactST(X,SD,T,srate,chID)
-%   ST=exactST(A,SD,T,srate,mid)
+%   [ST,SA]=exactST(X,SD,T,srate,chID)
+%   [ST,SA]=exactST(A,SD,T,srate,mid)
 % mid is center of seeking the time
 function [ST,newSA]=exactST(X,SD,T,srate,varargin)
 apSearchIntH=0.2; %(ms) -half of the interval to do spline
@@ -42,11 +42,17 @@ if flagX
         newSA{chi}=zeros(sAmt(chi),1);
         for k=1:sAmt(chi)
             % 1/2 with X,T,SD
-            idxloc=SD{chi}(k)+xpos;
-            binTime=T(idxloc);
-            binX=X(idxloc,chID(chi));
-            xx=linspace(binTime(1),binTime(end), apSearchIntH*20+1);
-            yy=myspline(binTime,binX,xx);
+            try
+                idxloc=SD{chi}(k)+xpos;
+                binTime=T(idxloc);
+                binX=X(idxloc,chID(chi));
+                xx=linspace(binTime(1),binTime(end), apSearchIntH*20+1);
+                yy=myspline(binTime,binX,xx);
+            catch ME
+                % if anything happens, mostly it is due to index out of
+                % bound, then forget about the spike, move on to next.
+                continue
+            end
             
             if binX(apSearchIntH+1)>mean(binX)
                 [tp,idx]=max(yy);

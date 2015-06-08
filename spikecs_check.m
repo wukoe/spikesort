@@ -2,19 +2,21 @@
 % purpose: whether there's false positive channels in the CS seqs. Checking
 % on raw data is the main method.
 %   [stat,IKS1,IKS2,IR]=spikecs_check(X,SD,info)
-function [stat,IKS1,IKS2,IR]=spikecs_check(X,SD,info)
+% SD should be marker spikes only.
+function [stat,IR1,IR2,IKS]=spikecs_check(X,SD,info)
 % Find the space range of each cluster (- the real "range" by 查看所有通道中出现aligned
 % spike的情况。如果两个cluster其实是同一个，这个方法可以更准确地把这个找出来。
 %%% Setting
 xcha=120;
-Rthr=2; % SNR thres <<< partially tested
-KSthr1=0.2; % < based on data with outlier removed.
-KSthr2=0.15;
+Rthr1=2; % SNR thres: normal standard. (tested)
+Rthr2=4; % higher standard.
+KSthr=0.15; % < based on data with outlier removed.
 
+%
 sda=length(SD);
 
-IKS1=false(xcha,sda);
-IKS2=IKS1; IR=IKS1;
+IKS=false(xcha,sda);
+IR1=IKS; IR2=IKS;
 ksnum=zeros(xcha,1);
 rnum=ksnum; ksrnum=ksnum;
 for chi=1:sda
@@ -50,15 +52,15 @@ for chi=1:sda
         end
         
         % ID of channels over uni-model threshold
-        IKS1(:,chi)=ksd>KSthr1;
-        IKS2(:,chi)=ksd>KSthr2;
+        IKS(:,chi)=ksd>KSthr;
         
         % ID of channels over exist-nonexist threshold
-        IR(:,chi)=R>Rthr;
+        IR1(:,chi)=R>Rthr1;
+        IR2(:,chi)=R>Rthr2;
         
-        rnum(chi)=sum(IR(:,chi));
-        ksnum(chi)=sum(IKS1(:,chi));
-        ksrnum(chi)=sum(IR(:,chi)&IKS1(:,chi));
+        rnum(chi)=sum(IR1(:,chi));
+        ksnum(chi)=sum(IKS(:,chi));
+        ksrnum(chi)=sum(IR1(:,chi)&IKS(:,chi));
         fprintf('|');
     end
 end

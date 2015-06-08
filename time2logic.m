@@ -42,9 +42,9 @@ else
     bAmt=size(binm,1);
 
     % Transfer SD to bin data
-    BD=false(bAmt,chAmt);
+    SD=false(bAmt,chAmt);
     for chi=1:chAmt
-        [~,BA]=binid(BD{chi},binm);
-        BD(:,chi)=(BA>0);
+        [~,BA]=binid(ST{chi},binm);
+        SD(:,chi)=(BA>0);
     end
 end

@@ -1,4 +1,5 @@
 % [NSD,chID]=getNSD(reconSD,CST)
+% Noise type is removed.
 function [NSD,chID]=getNSD(reconSD,CST)
 NSD=cell(0,1);
 chID=zeros(0,1);

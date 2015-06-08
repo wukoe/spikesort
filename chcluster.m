@@ -45,7 +45,6 @@ end
 
 
 %%%%%%%%%%%%%%% Clutering each channel.
-% if chAmt <<<
 sAmt=cellstat(SA,'length');
 
 % Channel SI: cluster identity of each spike in each channel.
@@ -226,7 +225,7 @@ if spkclu.cAmt>0
                 % Assign cluster if fullfil the criteria.
                 R=D./S; % difference/signal amplitude ratio
                 [tp,nidx]=min(R);
-                if tp<1/paras.SNratioThres_noise
+                if paras.bAlwaysMatch || tp<1/paras.SNratioThres_noise
                     CSI(noiseI(ni))=spkclu.types(nidx);
                 end
             end
