@@ -358,12 +358,12 @@ if runFlag(funcNumTab.merge)
         end
         fprintf('\n');
         
-%         % Corrected SD.
-%         outfile3.CST0=CST;        outfile3.SD0=SD; % their chID is AlichID.
-%         outfile3.SA0=cell(chinfo.AlichAmt,1);
-%         for chi=1:chinfo.AlichAmt
-%             outfile3.SA0{chi}=X(SD{chi},chinfo.AlichID(chi));
-%         end
+        % Corrected SD.
+        outfile3.CST0=CST;        outfile3.SD0=SD; % their chID is AlichID.
+        outfile3.SA0=cell(chinfo.AlichAmt,1);
+        for chi=1:chinfo.AlichAmt
+            outfile3.SA0{chi}=X(SD{chi},chinfo.AlichID(chi));
+        end
         
         %%% 生成新的NSD（每个分开的"unit"算一个通道）and new chID and chAmt.
         [outfile3.NSD0,tp]=getNSD(SD,CST);
@@ -392,11 +392,22 @@ if runFlag(funcNumTab.merge)
     if ~exist('outfile3','var')
         outfile3=load(fnC);
         chinfo=outfile3.chinfo;
-    end 
+    end
+    if ~exist('X','var')
+        fprintf('loading raw signal from %s\n',fnF);
+        load(fnF,'X');
+        load(fnF,'T');
+    end
+    
     disp('spike merge >>>');
-    ext=0.0005*info.srate;
-    tp=info.TimeSpan*info.srate;
-    [NSD,outfile3.NSD0csmark,outfile3.NSD0csrmlb]=spikemerge(outfile3.NSD0,outfile3.NSA0,info,'ext',ext,'time span',tp);
+    ext=0.0005;%*info.srate;
+    tp=info.TimeSpan;%*info.srate;
+    [ST,SA]=exactST(X,outfile3.NSD0,T,info.srate,chinfo.NSD0chID);
+    [~,outfile3.NSD0csmark,outfile3.NSD0csrmlb]=spikemerge(ST,SA,info,'ext',ext,'time span',tp);
+    NSD=outfile3.NSD0;
+    for chi=1:chinfo.NSD0chAmt
+        NSD{chi}(outfile3.NSD0csrmlb{chi})=[];
+    end
     
     % 需要将NSD重新组合成reconSD以利于2nd clustering 或 display.
     reconSD0=cell(chinfo.rawchAmt,1);
@@ -427,6 +438,8 @@ if runFlag(funcNumTab.merge)
     outfile3.chinfo=chinfo;
     outfile3.reconD0CSrmlb=reconD0CSrmlb;
     save(fnC,'-struct','outfile3');
+    STchID=chinfo.NSD0chID;
+    save(fnST,'ST','SA','STchID','info');
     disp('merging done');
 end
 
@@ -496,15 +509,13 @@ if runFlag(funcNumTab.toST)
     info=outfile3.info;
     chinfo=outfile3.chinfo;
     
-    SDTchID=1:chinfo.rawchAmt;
-    if paras.bExactST % Get Precise time by splining spike peaks.        
-        [SDT,SDA]=exactST(X,outfile2.rawSD,T,info.srate,SDTchID);
-        [rawSDT,rawSDA]=exactST(X,outfile2.rawSD,T,info.srate,SDTchID);
-        save(fnST,'SDT','SDTchID','rawSDT','SDA','rawSDA');
+    rawSDTchID=1:chinfo.rawchAmt;
+    if paras.bExactST % Get Precise time by splining spike peaks.
+        [rawSDT,rawSDA]=exactST(X,outfile2.rawSD,T,info.srate,rawSDTchID);
+        save(fnST,'-append','rawSDTchID','rawSDT','rawSDA');
     else
-        SDT=idx2time(outfile2.SD,T);
         rawSDT=idx2time(outfile2.rawSD,T);
-        save(fnST,'SDT','SDTchID','rawSDT');
+        save(fnST,'-append','rawSDTchID','rawSDT');
     end    
     disp('detected SD converted to ST');
     
@@ -518,20 +529,20 @@ if runFlag(funcNumTab.toST)
     thr=paras.STactThre*info.TimeSpan;
     I=(temp>thr);
     NSD=outfile3.NSD(I);
-    STchID=chinfo.CluchID(I);
-    STchAmt=length(STchID);
+    NSTchID=chinfo.CluchID(I);
+    STchAmt=length(NSTchID);
     
     % Remaining converted to ST
     if paras.bExactST % Get Precise time by splining spike peaks.
-        [ST,STA]=exactST(X,NSD,T,info.srate,STchID);
+        [NST,NSA]=exactST(X,NSD,T,info.srate,NSTchID);
     else
-        ST=idx2time(NSD,T);        
-        STA=cell(STchAmt,1);
+        NST=idx2time(NSD,T);        
+        NSA=cell(STchAmt,1);
         for chi=1:STchAmt
-            STA{chi}=X(NSD{chi},STchID(chi));
+            NSA{chi}=X(NSD{chi},NSTchID(chi));
         end
     end    
-    save(fnST,'-append','ST','STchID','info','STA');
+    save(fnST,'-append','NST','NSTchID','info','NSA');
     disp('sorted SD converted to ST');    
 end
 

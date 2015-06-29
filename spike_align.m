@@ -1,4 +1,4 @@
-%   A=spike_align(X,SD,srate,varargin)
+%   [A,rmlist,O]=spike_align(X,SD,srate,varargin)
 % X could be either signal data or the handle to .mat file.
 % here SD is index form (not time format);
 %   spike_align(...'chAssign',chID) deal with when X and SD does not have
@@ -9,6 +9,7 @@
 % channels as specified by I .
 %   spike_align(...'bSmooth',true/false) to smooth the edges of spikes
 %   ...'window' .. specify the window size. (default: -1 ~ 3 ms)
+% O:preww, postww, spklen
 function [A,rmlist,O]=spike_align(X,SD,srate,varargin)
 %%% Default setting
 % window for spike waveform
@@ -263,17 +264,15 @@ if bSmoothOthers
     end
 end
 
-% Output the length of the window
+%%%%%%%%%%% Output the length of the window
 O=struct('preww',preww,'postww',postww,'spklen',ptsAmt);
+end %main
 
-end
 
-
-%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%
 % For depressing the outlier noise 
 % when s=0.5, X=1 =roughly=>Y=1; when s=20, X=1 => Y=0.1;
 function Y=dpol(X,s)
 Y=1./(1+exp(-s*X))-0.5; 
 Y=Y*4/s;
-
 end

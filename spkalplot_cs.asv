@@ -1,0 +1,168 @@
+% trying prove the advantage of using CS on sorting.
+function spkalplot_cs(X,seq,seqMark,seqCS,SD,chID,CL)
+srate=20000;
+dispmaxcol=6;
+dispmaxrow=6;
+bSameScale=true;
+
+% Proc
+seqAmt=length(seq);
+seqlen=cellstat(seq,'length');
+% Union of channels used in all seqs
+chColle=[];
+for seqi=1:seqAmt
+    chColle=union(chColle,seq{seqi});
+end
+chAmt=length(chColle);
+% number of pages.
+pgAmt=[ceil(seqAmt/dispmaxrow),ceil(chAmt/dispmaxcol)]; %[verp, horp]
+
+%%%
+AD=cell(seqAmt,1);
+for seqi=1:seqAmt
+%     AD{seqi}=cell(seqlen(seqi),1);
+    tsd=cell(seqlen(seqi),1);
+    for k=1:seqlen(seqi)
+        tsd{k}=SD{seq{seqi}(k)}(seqCS{seqi}{k});
+    end
+    AD{seqi}=spike_align(X(:,chID(seq{seqi})),tsd,srate,'window',[-0.6,1]);
+end
+if bSameScale
+    tp=[0,0];
+    for seqi=1:seqAmt
+        for k=1:seqlen(seqi)
+            temp=mean(AD{seqi}{k},2);
+            tp(1)=min(tp(1),min(temp));
+            tp(2)=max(tp(2),max(temp));
+        end
+    end
+    axisScale=[0,size(AD{1}{1},1),tp];
+end
+
+%%% Initialize GUI controls
+% * location start from left bottom
+vpos=0;
+Fig=figure('Position',[100 10 1170 900]);%,'ResizeFcn',@resizegui); 
+HpreB=uicontrol('Style','pushbutton','String','<--','Position',[50,vpos,50,25],...
+    'Callback',@PreButton_CB);
+HnextB=uicontrol('Style','pushbutton','String','-->','Position',[160,vpos,50,25],...
+    'Callback',@NextButton_CB);
+HupB=uicontrol('Style','pushbutton','String','Up','Position',[240,vpos,50,25],...
+    'Callback',@UpButton_CB);
+HdownB=uicontrol('Style','pushbutton','String','Down','Position',[300,vpos,50,25],...
+    'Callback',@DownButton_CB);
+Hedit=uicontrol('Style','edit','Position',[110,vpos,40,25],...
+    'Callback',@EditBox_CB);
+% HcurvePop=uicontrol('Style','popup','String',{'samples','mean'},'Position',[220,vpos,100,25],...
+%     'Callback',@CurvePop_CB);
+
+% align(Fig,'Center','None');
+
+% Draw 1st page
+pgi=[1,1];
+drawpage(pgi);
+
+%%%%%%%%%%%%% Callback functions for the controls.
+%%% pre button
+    function PreButton_CB(hObject,eventdata)
+       if pgi(2)<=1
+           pgi(2)=1;
+       else
+           % Plot
+            pgi(2)=pgi(2)-1;
+           drawpage(pgi);
+       end
+    end
+    
+%%% next button
+    function NextButton_CB(hObject,eventdata)
+       if pgi(2)>=pgAmt(2)
+           pgi(2)=pgAmt(2);
+       else
+           % Plot
+           pgi(2)=pgi(2)+1;
+           drawpage(pgi);
+       end
+    end
+
+%%% up button
+    function UpButton_CB(hObject,eventdata)
+       if pgi(1)<=1
+           pgi(1)=1;
+       else
+           % Plot
+            pgi(1)=pgi(1)-1;
+           drawpage(pgi);
+       end
+    end
+    
+%%% next button
+    function DownButton_CB(hObject,eventdata)
+       if pgi(1)>=pgAmt(1)
+           pgi(1)=pgAmt(1);
+       else
+           % Plot
+           pgi(1)=pgi(1)+1;
+           drawpage(pgi);
+       end
+    end
+
+%%% page number text input
+    function EditBox_CB(hObject,eventdata)
+        tp=get(Hedit,'String');
+        pgi(2)=str2double(tp);
+        if pgi(2)<1, pgi(2)=1; end
+        if pgi(2)>pgAmt(2), pgi(2)=pgAmt(2); end
+        drawpage(pgi);
+    end
+
+%%%
+    function drawpage(pgi)
+        set(Fig,'Name',sprintf('%d seqs %d channels, page%d-%d',seqAmt,chAmt,pgi(1),pgi(2)));
+        set(Hedit,'String',pgi(2));
+        % Clean the page
+        subplot(1,1,1);
+        
+        %%%
+        pgseqI=(pgi(1)-1)*dispmaxrow+1:min(pgi(1)*dispmaxrow,seqAmt);
+        pgchI=(pgi(2)-1)*dispmaxcol+1:min(pgi(2)*dispmaxcol,chAmt);
+        for ri=1:length(pgseqI)
+            seqi=pgseqI(ri);
+            % seq MEA layout
+            subplot(dispmaxrow,dispmaxcol+1,(ri-1)*(dispmaxcol+1)+1);
+            tp=zeros(120,1); tp(chID(seq{seqi}))=1;
+            chlayout(tp,CL);
+            axis off
+            % seq infor.
+            title(sprintf('%d#(L:%d)'seqi));
+            
+            % spikes of each seq.
+            for ci=1:length(pgchI)
+                subplot(dispmaxrow,dispmaxcol+1,(ri-1)*(dispmaxcol+1)+1+ci);
+                chi=chColle(pgchI(ci));
+                
+                idx=find(seq{seqi}==chi);
+                if ~isempty(idx)
+                    if chi==seqMark(seqi)
+                        plot(AD{seqi}{idx},'r');
+                    else
+                        plot(AD{seqi}{idx},'b');
+                    end
+                end
+                if bSameScale
+                    axis(axisScale);
+                end
+                axis off                
+            end
+            
+            % chi info.
+            if ri==1
+                for ci=1:length(pgchI)
+                    subplot(dispmaxrow,dispmaxcol+1,(ri-1)*(dispmaxcol+1)+1+ci);
+                    title(num2str(chID(chColle(pgchI(ci)))));
+                end
+            end
+        end
+    end
+
+end

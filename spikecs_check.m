@@ -1,73 +1,140 @@
+% Find the space range of each CS by check raw signal(所有通道中出现aligned
+% spike的情况)。如果两个cluster其实是同一个，这个方法可以更准确地确认这一点。
 % analyze the info from spikemerge() and spikecs().
 % purpose: whether there's false positive channels in the CS seqs. Checking
 % on raw data is the main method.
-%   [stat,IKS1,IKS2,IR]=spikecs_check(X,SD,info)
-% SD should be marker spikes only.
-function [stat,IR1,IR2,IKS]=spikecs_check(X,SD,info)
-% Find the space range of each cluster (- the real "range" by 查看所有通道中出现aligned
-% spike的情况。如果两个cluster其实是同一个，这个方法可以更准确地把这个找出来。
-%%% Setting
-xcha=120;
-Rthr1=2; % SNR thres: normal standard. (tested)
+%   [stat,IR1,IR2,ID,IKS]=spikecs_check(X,SD,info)
+% Use all spikes in SD. (in this case, SD should be marker spikes only.)
+%   spikecs_check(X,SD,info,IW)
+% IW is cell same size as SD, IW{chi} determine which of spikes of SD{chi}
+% should be used to align each channel of X.
+% stat:rnum1,rnum2,ksnum,ksrnum.
+function [stat,IR1,IR2,ID,varargout]=spikecs_check(X,SD,info,varargin)
+% Setting
+spkThr=0.1*info.TimeSpan;
+Rthr1=2; % SNR thres: normal standard.
+% * thr=2 tested when the amplitude is measured by max(c)-min(c). (c is
+% mean curve), not sure how much difference would make to measure
+% abs(max(c)).
 Rthr2=4; % higher standard.
 KSthr=0.15; % < based on data with outlier removed.
+% threshold for time jitter (by dt STD)
+DTJthr=0.15;%(ms) = 3 points at 20000HZ SR.
+% threshold for lagging time.
+DLthr=0.5;%(ms)
+twin=[-1,1];
 
-%
+% Proc
+if ~isempty(varargin)
+    IW=varargin{1};
+    flagIW=true;
+else
+    flagIW=false;
+end
+
+DTJthr=DTJthr*info.srate/1000;
+DLthr=DLthr*info.srate/1000;
+xcha=size(X,2);
 sda=length(SD);
 
+if nargout<5
+    flagKS=false;
+else
+    flagKS=true;
+end
+
+%%%
+IR1=false(xcha,sda); IR2=IR1;
 IKS=false(xcha,sda);
-IR1=IKS; IR2=IKS;
-ksnum=zeros(xcha,1);
-rnum=ksnum; ksrnum=ksnum;
+ID=false(xcha,sda);
+rnum1=zeros(xcha,1); rnum2=rnum1;
+ksnum=zeros(xcha,1); ksrnum=ksnum;
+mt=cell(sda,1);
 for chi=1:sda
-    if length(SD{chi})<0.1*info.TimeSpan
-        rnum(chi)=0;
+    if length(SD{chi})<spkThr
+        rnum1(chi)=0;
         ksnum(chi)=0;
         ksrnum(chi)=0;
     else
-        % Align the signal in all X channels to representative SD of cluster.
-        sd=cell(xcha,1);
-        for k=1:xcha
-            sd{k}=SD{chi};
-        end
-        A=spike_align(X,sd,info.srate,'window',[-1,1]);
-        aLen=size(A{1},1);
-        
-        parfor k=1:xcha
-            ol=outlier_detect(A{k}');
-            A{k}=A{k}(:,~ol);
+        if flagIW
+            % Check the number of IW channels and X channels if match
+            assert(size(IW{chi},2)==xcha,'IW and X channel numbers not match.');
         end
         
-        % 看A中各个通道的叠加的有无和类别数。
+        % Align the signal in all X channels to one specific channel of SD.
+        tsd=cell(xcha,1);
+        for xi=1:xcha
+            if flagIW
+                tsd{xi}=SD{chi}(IW{chi}(:,xi));
+            else
+                tsd{xi}=SD{chi};
+            end
+        end
+        [A,~,O]=spike_align(X,tsd,info.srate,'window',twin);
+        baseidx=O.preww+1;
+        aLen=O.spklen;
+        % Remove outlier to make results more accurate. <<<
+        parfor xi=1:xcha
+            ol=outlier_detect(A{xi}');
+            A{xi}=A{xi}(:,~ol);
+        end
+        
+        % Check A中各个通道的叠加的有无。
         R=ratioPeakNoise(A);
-        
-        ksd=zeros(xcha,1);
-        parfor chm=1:xcha
-            al=A{chm};
-            d=zeros(aLen,1);
-            for k=1:aLen
-                d(k)=test_ks(al(k,:));
-            end            
-            ksd(chm)=max(d);
-        end
-        
-        % ID of channels over uni-model threshold
-        IKS(:,chi)=ksd>KSthr;
-        
         % ID of channels over exist-nonexist threshold
         IR1(:,chi)=R>Rthr1;
         IR2(:,chi)=R>Rthr2;
         
-        rnum(chi)=sum(IR1(:,chi));
+        % Check是否存在多类别的情况。
+        if flagKS
+            ksd=zeros(xcha,1);
+            parfor xi=1:xcha
+                al=A{xi};
+                d=zeros(aLen,1);
+                for k=1:aLen
+                    d(k)=test_ks(al(k,:));
+                end
+                ksd(xi)=max(d);
+            end
+            % ID of channels over uni-model threshold
+            IKS(:,chi)=ksd>KSthr;
+        end
+        
+        % Check是否存在较大的时间滞后差。record peak time at the same time.
+        pt=zeros(xcha,1);
+        for xi=1:xcha
+            if IR1(xi,chi)
+                % find peak location
+                cm=mean(A{xi},2);
+                [~,idx]=max(abs(cm)); % <<< only hunt for max peak for EPSP.
+                pt(xi)=idx-baseidx;
+                if pt(xi)>=DLthr
+                    ID(xi,chi)=true;
+                end                
+            end
+        end
+        % transform it to time (s) relative to the markers spikes (SD)
+        temp=pt/info.srate;
+        mt{chi}=temp(IR1(:,chi));
+        
+        % number statistics.
+        rnum1(chi)=sum(IR1(:,chi));
+        rnum2(chi)=sum(IR2(:,chi));
         ksnum(chi)=sum(IKS(:,chi));
         ksrnum(chi)=sum(IR1(:,chi)&IKS(:,chi));
         fprintf('|');
     end
 end
 
-stat.rnum=rnum;
-stat.ksnum=ksnum;
-stat.ksrnum=ksrnum;
+stat.rnum1=rnum1;
+stat.rnum2=rnum2;
+% stat.meanTime=mt;
+if flagKS
+    stat.ksnum=ksnum;
+    stat.ksrnum=ksrnum;
+    varargout{1}=IKS;
+end
+stat.meanTime=mt;
 end % of main
 
 
@@ -81,33 +148,12 @@ I=find(aa>=5);
 for k=1:length(I)
     chi=I(k);
     mc(:,chi)=mean(A{chi},2); % mean of all curves.
-    v(chi)=max(std(A{chi},[],2)); % standard curves.
+    v(chi)=max(std(A{chi},[],2)); % STD of curves. choose max of all points
 end    
-ap=max(mc)-min(mc); % amplitude of mean curves
+% ap=max(mc)-min(mc); % amplitude of mean curves
+ap=max(abs(mc));
+
 % Ratio
 R=zeros(xcha,1);
 R(I)=(ap(I)./v(I))';
 end
-
-% seqAmt=length(seqlist);
-% sd=cell(xcha,1);
-% Fch=false(xcha,seqAmt);
-% for seqi=1:seqAmt
-%     % Align the signal in all X channels to representative SD of cluster.
-%     chi=seqlist{seqi}(idxS(seqi));
-%     temp=SD{chi}(seqCS{seqi}(:,idxS(seqi)));
-%     for chi=1:xcha
-%         sd{chi}=temp;
-%     end
-%     A=spike_align(X,sd,info.srate,'window',[-1,1]);
-%     
-%     %%% Get ratio of spike peaks to noise
-%     R=ratioPeakNoise(A);
-%     
-%     %%% whether there's one more more population in the morphology
-%     % <<<
-%     
-%     % related channels
-%     Fch(:,seqi)=R;     
-% end
-% I=(Fch>Rthr);
