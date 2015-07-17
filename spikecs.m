@@ -1,17 +1,17 @@
 % Locate conduction signal in the original spike train data.
 % Find the trace by the marked "top" units, Use results from spikemerge().
-%   [seq,seqMark,seqType,seqCS,stat]=spikecs('spktrain',ST,marklb,info)
-%   [seq,seqMark,seqType,seqCS,stat]=spikecs('rawsig',ST,marklb,info,X,chID)
+%   [seq,seqMark,seqType,seqCS,stat]=spikecs('spktrain',SD,ST,marklb,info,X,chID)
+%   [seq,seqMark,seqType,seqCS,stat]=spikecs('rawsig',SD,ST,marklb,info,X,chID)
 % seqType is property of each member in a CS. 1=marker; 2=core member;
 % 3x=edge member - 31=low amp with no large time diff, 32=low amp with
 % large time delay (could be the signal of post-synaptic potential?)
 % In method=='rawsig', function need to call spikecs_check().
 function [seq,seqMark,seqType,seqCS,stat]=spikecs(method,SD,ST,marklb,info,X,chID)
-ext=0.0008;%(s)
+ext=0.001;%(s)
 param=struct();
 param.bAutoThres=true;
 param.minThres=4/60*info.TimeSpan;
-param.numPthr=1e-11;%<<<<
+param.numPthr=1e-10;% here the thres should be more strict than spikemerge.m
 param.timeSpan=info.TimeSpan;
 param.DTJthr=0.1/1000;%(ms/1000) = 2 points at 20000HZ SR. 
 
@@ -55,6 +55,7 @@ for mi=1:markAmt
     mst{mi}=ST{markI(mi)}(marklb{mi}==1);
     msd{mi}=SD{markI(mi)}(marklb{mi}==1);
 end
+sAmt=sAmt(markI);
 
 seq=cell(markAmt,1);
 seqCS=cell(markAmt,1);
@@ -64,7 +65,7 @@ if method==1
     for mi=1:markAmt
         % 当前marker neuron spike里面 marklb==1者选出，并就这些进行全ST扫描
         % * ST里面自身也要包括在内 （只指自身那些marklb==1的spike）
-        [Ichi,Isd,rnum,foI]=cspair(mst{mi},ST,ext,param);
+        [Ichi,Isd,rnum,foI]=cspair(mst{mi},ST,ext,sAmt(mi),param);
         foAmt=length(foI);
         if foAmt<=1
             stat.fospknum{mi}=rnum;
@@ -73,7 +74,12 @@ if method==1
         
         %%% Add spikecs_check        
         tx=X(:,chID(foI));
-        [~,IR1,IR2]=spikecs_check(tx,msd(mi),info,{Ichi});
+        tp=any(Ichi,2);
+        tpI=false(size(Ichi));
+        for k=1:length(foI)
+            tpI(:,k)=tp;
+        end
+        [~,IR1,IR2]=spikecs_check(tx,msd(mi),info,'IW',{tpI});
         %        
         foI=foI(IR1);
         foAmt=sum(IR1);

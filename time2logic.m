@@ -46,5 +46,9 @@ else
     for chi=1:chAmt
         [~,BA]=binid(ST{chi},binm);
         SD(:,chi)=(BA>0);
+        fprintf('|');
     end
+    fprintf('\n');
+end
+
 end

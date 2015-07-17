@@ -1,11 +1,11 @@
 % Program for making the plot of spikes of one neuron/channel aligned to time of spikes(peak). 
 % Use button and text to navigate.
 % Accept 2 types of data:
-%   spkalignplot(fnX,SD,srate) uses full signal X and index format data spike SD.
+%   spkalplot(fnX,SD,srate) uses full signal X and index format data spike SD.
 % X can be either data in memory or MatFile handle. In this case the actual
 % number of channels shown depends on SD.
-%   spkalignplot(A) uses aligned data
-%   A=spkalignplot() export the aligned data.
+%   spkalplot(A) uses aligned data
+%   A=spkalplot() export the aligned data.
 % Other varargin:
 % 'NCI', (neuron cluster identity) - add clustering information using color;
 % 'window',[-pre,post] - specify the time window (ms) for spikes.
@@ -57,9 +57,6 @@ if ~isempty(upara)
     % process the parameter options one by one
     for parai=1:length(pname)
         switch pname{parai}
-%             case 'select'
-%                 seleI=pinfo{parai};
-%                 bChSelect=true;
             case 'NCI' % neuron cluster identity
                 CST=pinfo{parai};
                 bCluster=true;
@@ -151,7 +148,7 @@ Fig=figure('Position',[100 10 1170 900]);%,'ResizeFcn',@resizegui);
 HpreB=uicontrol('Style','pushbutton','String','<--','Position',[50,vpos,50,25],'Callback',@PreButton_CB);
 HnextB=uicontrol('Style','pushbutton','String','-->','Position',[160,vpos,50,25],'Callback',@NextButton_CB);
 Hedit=uicontrol('Style','edit','Position',[110,vpos,40,25],'Callback',@EditBox_CB);
-HcurvePop=uicontrol('Style','popup','String',{'samples','mean'},'Position',[220,800,100,25],...
+HcurvePop=uicontrol('Style','popup','String',{'samples','mean'},'Position',[220,vpos,100,25],...
     'Callback',@CurvePop_CB);
 
 set(Fig,'Name',sprintf('%d channels in total, %d pages',chAmt,pgAmt));

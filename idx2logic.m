@@ -1,6 +1,6 @@
 % SD=idx2logic(SI)
 % SD=idx2logic(SI,dlen)
-% SD=idx2logic(SI,dlen,interval)
+% SD=idx2logic(SI,dlen,interval) interval in (pts)
 function SD=idx2logic(SI,varargin)
 cha=length(SI);
 
@@ -19,14 +19,14 @@ if nargin==3
     interval=varargin{2};
     ptsAmt=ceil(ptsAmt/interval);
 else
-    interval=1;
+    interval=20;
 end
 
 %
 SD=false(ptsAmt,cha);
 for chi=1:cha
-    tp=ceil(SI{chi}/interval);
-    SD(tp,chi)=true;
+    I=ceil(SI{chi}/interval);
+    SD(I,chi)=true;
 end
 
 end

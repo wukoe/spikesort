@@ -5,17 +5,17 @@
 % 'auto thres'=true
 function [ST,marklb,rmlb]=spikemerge(ST,SA,info,varargin)
 % Standard to find cluster sequence.
-ext=0.0008; %0.5/0.25ms
-extVarThre=0.0001; 
+ext=0.001; % ! 1ms is necessary, testing shows some delay can >0.7ms.
 % optSelect=2; % way to determine the representative of the cluster
 param=struct();
 param.bAutoThres=true; % whether use algorithm-determined adaptive threshold for pair number.
-param.numPthr=1e-6; % for with auto threshold
+param.numPthr=1e-8; % for with auto threshold
 minThres=4/60*info.TimeSpan; % static threshold if chosen to use.
 flagUserTimeSpan=false;
 bRmIntv=false; % whether remove the large "empty" segments of spike train
 % spike time difference jitter limit.
 param.DTJthr=0.15/1000;%(ms/1000) = 3 points at 20000HZ SR. <<<
+param.bCScheck=false;
 
 % User
 if ~isempty(varargin)
@@ -78,77 +78,31 @@ for chi=1:chAmt
     end
     
     %%% Find all tight-following spikes (under ext) in the channel pairs
-    [Ichi,Isd,~,foI]=cspair(ST{chi},ST(chi+1:end),ext,param); % 不需要对全体进行扫描，只需要对后面的单元进行即可。因为与前面的已经进行过了。
+    [Ichi,Isd,~,foI]=cspair(ST{chi},ST(chi+1:end),ext,sAmt(chi),param); % 不需要对全体进行扫描，只需要对后面的单元进行即可。因为与前面的已经进行过了。
     
-%     %%% Number threshold.
-%     if bAutoThres
-%         sdnum=length(Isd);
-% %         ts=sAmt(chi+1:end);
-%         foI=false(sdnum,1);% indicator of "follower"
-%         for m=1:sdnum
-%             [P,expectnum]=probable_rs(timeSpan,[sAmt(chi),sAmt(chi+m)],ext,rnum(m));
-%             % * when 2ch have spike 10000&1000, expect~30; when have
-%             % 10000&10000, expect~300-400.
-%             if rnum(m)>expectnum && P<numPthr
-%                 % 第一个条件是为了保证这样一个事实：P足够小的原因是因为rnum位于概率分布峰值的右侧（数量大大超过随机模型下的预期），
-%                 % 而非相反（数量远小于预期）。
-%                 foI(m)=true;
-%             end
-%         end
-%         foI=find(foI); foAmt=length(foI);
-%     else
-%         foI=find(rnum>=minThres); foAmt=sum(rnum>=minThres);
-%     end
-%     % 若没有任何满足条件的conduction通道，这个channel(chi)不存在相关的CS，放弃.
-%     if foAmt==0 
-%         continue
-%     end
-%     % Keep only effective CS channels's information.
-%     Ichi=Ichi(:,foI); Isd=Isd(foI); rnum=rnum(foI);
-%     
-%     %%% Time difference threshold
-%     for fi=1:foAmt
-%         % Time difference between each pair.
-%         dt=ST{chi}(Ichi(:,fi))-ST{foI(fi)+chi}(Isd{fi});
-%         % Get mean
-%         dtm=mean(dt);
-%         % Delete any pair whose difference deviate from this mean more than
-%         % threshold.
-%         I=(abs(dt-dtm)>DTJthr);
-%         tp=find(Ichi(:,fi));
-%         Ichi(tp(I),fi)=false;
-%         % * removing Isd must be placed later ?
-%         tp=find(Isd{fi});
-%         Isd{fi}(tp(I))=false;
-%         % Update repeat number.
-%         rnum(fi)=sum(Ichi(:,fi));
-%     end
-% %     % Remove the unqualified spikes from Isd list
-% %     for fi=1:foAmt
-% %         tp=find(Isd{fi});
-% %         Isd{fi}(tp(I))=false;
-% %     end
-%     
-%     % Check for second time whether the remaining still fullfill number limit.
-%     if bAutoThres
-%         seleI=false(foAmt,1);
-%         for fi=1:foAmt
-%             [P,expectnum]=probable_rs(timeSpan,[sAmt(chi),sAmt(chi+foI(fi))],ext,rnum(fi));
-%             if rnum(fi)>expectnum && P<numPthr
-%                 seleI(fi)=true;
-%             end
-%         end
-%     else
-%         seleI=(rnum>=minThres);
-%     end
-%     foI=foI(seleI); foAmt=sum(seleI);
-%     % Keep only effective CS channels's information.
-%     Ichi=Ichi(:,seleI); Isd=Isd(seleI); rnum=rnum(seleI);
-%     % 再次，若没有任何满足条件的conduction通道，放弃这个channel(chi).
+    % 再次，若没有任何满足条件的conduction通道，放弃这个channel(chi).
     foAmt=length(foI);
     if foAmt==0 
         continue
-    end    
+    end
+    
+    %%% Add spikecs_check <<<,<<<<
+    if param.bCScheck
+        tx=X(:,chID(foI));
+        tp=any(Ichi,2);
+        tpI=false(size(Ichi));
+        for k=1:size(Ichi,2)
+            tpI(:,k)=tp;
+        end
+        [~,IR1,IR2]=spikecs_check(tx,msd(mi),info,'IW',{tpI});
+        %
+        foI=foI(IR1);        foAmt=sum(IR1);
+        rnum=rnum(IR1);        Ichi=Ichi(:,IR1);        Isd=Isd(IR1);
+        if foAmt<=1
+            stat.fospknum{mi}=rnum;
+            continue
+        end
+    end
     
     %%% Determine which to delete of each pair.
     % * Comparing rule:
@@ -171,7 +125,7 @@ for chi=1:chAmt
     
     % Apply the comparing rule.
     for fi=1:foAmt
-%         if ampchi(fi)>ampsd(fi)*1.25 || ampsd(fi)>ampchi(fi)*1.25
+%         if ampchi(fi)>ampsd(fi)*1.25 || ampsd(fi)>ampchi(fi)*1.25  %<<<<
             if ampchi(fi)>ampsd(fi)
                 flagKeepchi=true;
             else

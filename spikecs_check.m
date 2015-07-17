@@ -9,7 +9,7 @@
 % IW is cell same size as SD, IW{chi} determine which of spikes of SD{chi}
 % should be used to align each channel of X.
 % stat:rnum1,rnum2,ksnum,ksrnum.
-function [stat,IR1,IR2,ID,varargout]=spikecs_check(X,SD,info,varargin)
+function [stat,IR1,IR2,ID,O,A]=spikecs_check(X,SD,info,varargin)
 % Setting
 spkThr=0.1*info.TimeSpan;
 Rthr1=2; % SNR thres: normal standard.
@@ -21,29 +21,39 @@ KSthr=0.15; % < based on data with outlier removed.
 % threshold for time jitter (by dt STD)
 DTJthr=0.15;%(ms) = 3 points at 20000HZ SR.
 % threshold for lagging time.
-DLthr=0.5;%(ms)
+DLthr=1;%(ms)
 twin=[-1,1];
 
-% Proc
+% User
+flagIW=false;
+flagKS=false;
+flagFoClu=false;
 if ~isempty(varargin)
-    IW=varargin{1};
-    flagIW=true;
-else
-    flagIW=false;
+    [pname,pinfo]=paramoption(varargin{:});
+    % process the parameter options one by one
+    for parai=1:length(pname)
+        switch pname{parai}
+            case 'IW'
+                IW=pinfo{parai};
+                flagIW=true;
+            case 'KS'
+                flagKS=true;
+            case 'fo clu'
+                flagFoClu=true;
+            otherwise
+                error('unidentified options');
+        end
+    end
 end
 
+% Proc
 DTJthr=DTJthr*info.srate/1000;
 DLthr=DLthr*info.srate/1000;
 xcha=size(X,2);
 sda=length(SD);
 
-if nargout<5
-    flagKS=false;
-else
-    flagKS=true;
-end
 
-%%%
+%%%%%%%%%%%%
 IR1=false(xcha,sda); IR2=IR1;
 IKS=false(xcha,sda);
 ID=false(xcha,sda);
@@ -73,34 +83,19 @@ for chi=1:sda
         [A,~,O]=spike_align(X,tsd,info.srate,'window',twin);
         baseidx=O.preww+1;
         aLen=O.spklen;
-        % Remove outlier to make results more accurate. <<<
-        parfor xi=1:xcha
-            ol=outlier_detect(A{xi}');
-            A{xi}=A{xi}(:,~ol);
-        end
+%         % Remove outlier to make results more accurate. <<<
+%         parfor xi=1:xcha
+%             ol=outlier_detect(A{xi}');
+%             A{xi}=A{xi}(:,~ol);
+%         end
         
-        % Check A中各个通道的叠加的有无。
+        %%% Check A中各个通道的叠加的有无。
         R=ratioPeakNoise(A);
         % ID of channels over exist-nonexist threshold
         IR1(:,chi)=R>Rthr1;
         IR2(:,chi)=R>Rthr2;
         
-        % Check是否存在多类别的情况。
-        if flagKS
-            ksd=zeros(xcha,1);
-            parfor xi=1:xcha
-                al=A{xi};
-                d=zeros(aLen,1);
-                for k=1:aLen
-                    d(k)=test_ks(al(k,:));
-                end
-                ksd(xi)=max(d);
-            end
-            % ID of channels over uni-model threshold
-            IKS(:,chi)=ksd>KSthr;
-        end
-        
-        % Check是否存在较大的时间滞后差。record peak time at the same time.
+        %%% Check是否存在较大的时间滞后差。record peak time at the same time.
         pt=zeros(xcha,1);
         for xi=1:xcha
             if IR1(xi,chi)
@@ -115,9 +110,42 @@ for chi=1:sda
         end
         % transform it to time (s) relative to the markers spikes (SD)
         temp=pt/info.srate;
-        mt{chi}=temp(IR1(:,chi));
+        mt{chi}=temp(IR1(:,chi));        
         
-        % number statistics.
+        %%% Check是否存在多类别的情况。
+        if flagKS
+            ksd=zeros(xcha,1);
+            parfor xi=1:xcha
+                al=A{xi};
+                d=zeros(aLen,1);
+                for k=1:aLen
+                    d(k)=test_ks(al(k,:));
+                end
+                ksd(xi)=max(d);
+            end
+            % ID of channels over uni-model threshold
+            IKS(:,chi)=ksd>KSthr;
+        end
+        
+        %%% by sorting.
+        if flagFoClu
+            IC=zeros(xcha,1);
+            for xi=1:xcha
+                al=A{xi};
+                anum=size(al,2);
+                % Feature
+                temp=spike_feature(al,'dim',3);
+                % Cluster
+                temp=zscore(temp);
+                CSI=spike_cluster(temp,'kmeans');
+                % Count the number 
+                tp=reabylb(CSI);
+                I=(tp.typeAmt>=1/6*info.TimeSpan);
+                IC(xi)=sum(I);
+            end
+        end        
+        
+        %%% number statistics.
         rnum1(chi)=sum(IR1(:,chi));
         rnum2(chi)=sum(IR2(:,chi));
         ksnum(chi)=sum(IKS(:,chi));
@@ -129,10 +157,15 @@ end
 stat.rnum1=rnum1;
 stat.rnum2=rnum2;
 % stat.meanTime=mt;
+
+O=struct();
 if flagKS
     stat.ksnum=ksnum;
     stat.ksrnum=ksrnum;
-    varargout{1}=IKS;
+    O.IKS=IKS;
+end
+if flagFoClu
+    O.IC=IC;
 end
 stat.meanTime=mt;
 end % of main

@@ -7,6 +7,7 @@ apSearchIntH=0.2; %(ms) -half of the interval to do spline
 
 chAmt=length(SD);
 sAmt=cellstat(SD,'length');
+% flagX: whether input is raw signal X or aligned A.
 if iscell(X)
     flagX=false;
     mid=varargin{1};

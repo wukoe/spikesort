@@ -63,7 +63,7 @@ paras.SNratioThres_cm=12; % 15 was tested.
 paras.bIndivMove=false; % move each spike with individual distance or not.
 
 % To ST
-paras.STactThre=0.1; % (spikes/sec)
+paras.STactThre=0.2; % (spikes/sec)
 
 
 %%%%%%%%%%%% User input 
@@ -295,7 +295,7 @@ if runFlag(funcNumTab.align)
     thr=paras.STactThre*info.TimeSpan;
     sa=cellstat(outfile2.rawSD,'length');
     I=(sa>=thr); sa=sa(I);
-    SD=outfile2.rawSD(I); SA=outfile2.rawSA(I); % * SQ not need to be saved for further use.    
+    SD=outfile2.rawSD(I); NSA0=outfile2.rawSA(I); % * SQ not need to be saved for further use.    
     chinfo.AlichAmt=sum(I);
     temp=(1:chinfo.rawchAmt)';    chinfo.AlichID=temp(I);
     
@@ -307,14 +307,14 @@ if runFlag(funcNumTab.align)
         % * must remove large indexed SD first.
         rmlist=(SD{chi}+SO.postww>info.ptsAmt);
         SD{chi}(rmlist)=[];
-        SA{chi}(rmlist)=[];
+        NSA0{chi}(rmlist)=[];
         rmlist=(SD{chi}<=SO.preww);
         SD{chi}(rmlist)=[];
-        SA{chi}(rmlist)=[];
+        NSA0{chi}(rmlist)=[];
     end
     
     % Update with new data
-    outfile2.SD=SD; outfile2.SA=SA;
+    outfile2.SD=SD; outfile2.SA=NSA0;
     info.spklen=SO.spklen; info.spkprew=SO.preww; info.spkpostw=SO.postww;
     outfile2.info=info;
     outfile2.chinfo=chinfo;
@@ -359,11 +359,12 @@ if runFlag(funcNumTab.merge)
         fprintf('\n');
         
         % Corrected SD.
-        outfile3.CST0=CST;        outfile3.SD0=SD; % their chID is AlichID.
-        outfile3.SA0=cell(chinfo.AlichAmt,1);
-        for chi=1:chinfo.AlichAmt
-            outfile3.SA0{chi}=X(SD{chi},chinfo.AlichID(chi));
-        end
+        outfile3.SD0=SD; % their chID is AlichID.
+%         outfile3.CST0=CST; no necessary <<<
+%         outfile3.SA0=cell(chinfo.AlichAmt,1);
+%         for chi=1:chinfo.AlichAmt
+%             outfile3.SA0{chi}=X(SD{chi},chinfo.AlichID(chi));
+%         end
         
         %%% 生成新的NSD（每个分开的"unit"算一个通道）and new chID and chAmt.
         [outfile3.NSD0,tp]=getNSD(SD,CST);
@@ -384,8 +385,9 @@ if runFlag(funcNumTab.merge)
         paras.bAlwaysMatch=saveopt;
         disp('pre-clustering done');
     end
+    
 
-    %%%
+    %%%%%%%%%%%%
     % *!!! (Merging is put here only because it uses biggest amplitude as
     % standard to keep spikes in a cluster. -this can do the merging when
     % unsorted data is used.) 
@@ -400,10 +402,10 @@ if runFlag(funcNumTab.merge)
     end
     
     disp('spike merge >>>');
-    ext=0.0005;%*info.srate;
-    tp=info.TimeSpan;%*info.srate;
-    [ST,SA]=exactST(X,outfile3.NSD0,T,info.srate,chinfo.NSD0chID);
-    [~,outfile3.NSD0csmark,outfile3.NSD0csrmlb]=spikemerge(ST,SA,info,'ext',ext,'time span',tp);
+    % Accurate time by up-sampling.
+    [NST0,NSA0]=exactST(X,outfile3.NSD0,T,info.srate,chinfo.NSD0chID);
+    % Merge function
+    [~,outfile3.NSD0csmark,outfile3.NSD0csrmlb]=spikemerge(NST0,NSA0,info,'time span',info.TimeSpan);
     NSD=outfile3.NSD0;
     for chi=1:chinfo.NSD0chAmt
         NSD{chi}(outfile3.NSD0csrmlb{chi})=[];
@@ -426,9 +428,9 @@ if runFlag(funcNumTab.merge)
             reconD0CSrmlb{chi}=temp2(idx);
         end
     end
-    % Delete any 0 spike channels
+    % Delete any very sparse spike channels
     sa=cellstat(reconSD0,'length');
-    I=(sa>0);
+    I=(sa>10);
     reconSD0=reconSD0(I);
     temp=(1:chinfo.rawchAmt)';
     chinfo.MergechID=temp(I);    chinfo.MergechAmt=length(chinfo.MergechID);
@@ -438,8 +440,8 @@ if runFlag(funcNumTab.merge)
     outfile3.chinfo=chinfo;
     outfile3.reconD0CSrmlb=reconD0CSrmlb;
     save(fnC,'-struct','outfile3');
-    STchID=chinfo.NSD0chID;
-    save(fnST,'ST','SA','STchID','info');
+    NST0chID=chinfo.NSD0chID;
+    save(fnST,'NST0','NSA0','NST0chID','info');
     disp('merging done');
 end
 

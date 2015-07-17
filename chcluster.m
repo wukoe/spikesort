@@ -105,7 +105,7 @@ for chi=1:chAmt
         % Clustering
         tpCSI=spike_cluster(temp,paras.cluMethod);
         
-        %%% Use point KS to further separate        
+        %%% Use point KS to further separate spike morphology
         if paras.bFineCluster
             spkclu=reabylb(tpCSI);
             nidx=find(spkclu.types==0,1);
@@ -116,11 +116,8 @@ for chi=1:chAmt
                 spkclu.cAmt=spkclu.cAmt-1;
                 spkclu.ids(nidx)=[];
             end
-            % 1/2 pointKS for the spike morphology
             temp=Ach(:,sfnol);
-            % 2/2 pointKS for the spike feature
-%             temp=temp';
-            % e/2
+
             for ci=1:spkclu.cAmt % 对每一类进行细分
                 tp=pointKS(temp(:,spkclu.ids{ci}),true); % bSpk=true;
                 % 若tp表示多于一类
@@ -188,7 +185,8 @@ else
     CSI=CSI{1};
 end
 
-%%% Match 1. noisy spikes & 2. left aside in spike draw; to the templates (choice 1, the other is at end of whole program) <<<
+%%% Match 1. noisy spikes & 2. left aside in spike draw, to the templates 
+% * (Here's location choice 1 to do the job, the other is at end of whole clustering)
 % Separate noise and clean spikes.
 spkclu=reabylb(CSI);
 nidx=find(spkclu.types==0,1);
@@ -225,6 +223,7 @@ if spkclu.cAmt>0
                 % Assign cluster if fullfil the criteria.
                 R=D./S; % difference/signal amplitude ratio
                 [tp,nidx]=min(R);
+                % * bAlwaysMatch意味着必须选择，哪怕匹配度再低。如果不选这一项，则必须达到tp<1/paras.SNratioThres_noise才能标记，不然保持0标签。
                 if paras.bAlwaysMatch || tp<1/paras.SNratioThres_noise
                     CSI(noiseI(ni))=spkclu.types(nidx);
                 end

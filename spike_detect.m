@@ -34,7 +34,7 @@ end
 % 筛选spike
 % 是否移除宽度在范围之外的spike
 bBadWidthRemove=true;
-spikeWidthThres=[0,0.8]; % (ms) should be in between
+spikeWidthThres=[0,0.7]; % (ms) should be in between
 % * 下限注意，实践发现很多标准的spike宽度只有1个样本点（对应<0.1ms）
 
 % 是否合并一个complex里面的多个峰
@@ -48,7 +48,7 @@ bAccuPeak=false;
 apSearchIntH=0.2; %(ms) -half of the interval to do spline (extend left and right from the maximum location)
 
 % SQ里面记录interval过小的阈值
-spikeIntervalThres=5; % (ms) should be bigger than
+spikeIntervalThres=2.5; % (ms) should be bigger than
 % * spikeIntervalThres 应该比postww or preww大，这样才能在smoothing other spike 中提供保护
 % （后者以DQ中spikeIntervalThres项目有记录为激活条件）
 
@@ -86,20 +86,8 @@ PSD=NSD;
 % Get the windows for bin - detect spikes based on local time window
 [segm,sega]=cutseg([1,pntAmt],movLen);
 for segi=1:sega
-    % The RMS method need to separate the interval into smaller bins (20ms)
-    % - determine the small bin segmentation.
-    if thresMethod==3        
-        [sbseg,sba]=cutseg([1,segm(segi,2)-segm(segi,1)+1],srate*0.02);
-        if sbseg(end,2)-sbseg(end,1)<(sbseg(1,2)-sbseg(1,1))/2
-            sbseg(end-1,2)=sbseg(end,2);
-            sbseg(end,:)=[];
-            sba=sba-1;
-        end
-    end
-    
-    
     binX=X(segm(segi,1):segm(segi,2));
-
+    
     % Remove outliers - method: detect all points larger than 15 times (OLrmThres) of
     % STD, replace by 0 (STD might need to be updated later)
     if useOLrm
@@ -141,6 +129,15 @@ for segi=1:sega
             ssd=median(abs(binX))/0.6745;
 
         case 3
+            % The RMS method need to separate the interval into smaller bins (20ms)
+            % - determine the small bin segmentation.            
+            [sbseg,sba]=cutseg([1,segm(segi,2)-segm(segi,1)+1],srate*0.02);
+            if sbseg(end,2)-sbseg(end,1)<(sbseg(1,2)-sbseg(1,1))/2
+                sbseg(end-1,2)=sbseg(end,2);
+                sbseg(end,:)=[];
+                sba=sba-1;
+            end
+            % Do averaging and threshold.
             binNum=zeros(sba,1);
             for sbi=1:sba
                 binNum(sbi)=mean(binX(sbseg(sbi,1):sbseg(sbi,2)).^2); % mean square
@@ -290,43 +287,43 @@ if bMergePeak
                 else
                     seleidx=[]; % 不选择complex中的任何
                 end
-            elseif cplxpn==3
-                % Find whether rule2 applies
-                ps=sign(temp); % polarity sign
-                if isequal(ps,[-1;1;-1]) || isequal(ps,[1;-1;1]) % 检查是否NPN or PNP
-                    % 应用规则2：当有(PNP or NPN），以中间的峰为准。
-                    seleidx=2;
-                else
-                    % 1/N
-                    [~,seleidx]=max(abs(temp));
-                    
-                    % 2/N
-%                     I=find(temp<0,1);
-%                     if ~isempty(I)
-%                         [~,seleidx]=min(temp);
-%                     else
-%                         [~,seleidx]=max(temp);
-%                     end
-                    
-                    % 3/N
-%                     sps=sum(ps==-1); % number of negative peaks
-%                     if sps==0
-%                         % 所有都为正,以第一个出现的为准
-%                         seleidx=1;
-%                     elseif sps==1 || sps==2
-%                         % 应用规则3：当存在负峰，除非第一的是正并且大于第二的两倍，否则以负为准。
-%                         [atp,idx]=sort(abs(temp),'descend');
-%                         if ps(idx(1))==1 && atp(1)>=atp(2)*onetwoRatio
-%                             seleidx=idx(1);
-%                         else                            
-%                             I=(ps==-1); idx=idx(I);
-%                             seleidx=idx(1);
-%                         end
-%                     else % sps==3 应用规则4：当有多个的负峰
-%                         [~,seleidx]=min(temp);
-%                     end
-                    %e/N
-                end                    
+%             elseif cplxpn==3
+%                 % Find whether rule2 applies
+%                 ps=sign(temp); % polarity sign
+%                 if isequal(ps,[-1;1;-1]) || isequal(ps,[1;-1;1]) % 检查是否NPN or PNP
+%                     % 应用规则2：当有(PNP or NPN），以中间的峰为准。
+%                     seleidx=2;
+%                 else
+%                     % 1/N just choose the max amplitude.
+%                     [~,seleidx]=max(abs(temp));
+%                     
+%                     % 2/N apply more sophisticated rules.
+% %                     I=find(temp<0,1);
+% %                     if ~isempty(I)
+% %                         [~,seleidx]=min(temp);
+% %                     else
+% %                         [~,seleidx]=max(temp);
+% %                     end
+%                     
+%                     % 3/N
+% %                     sps=sum(ps==-1); % number of negative peaks
+% %                     if sps==0
+% %                         % 所有都为正,以第一个出现的为准
+% %                         seleidx=1;
+% %                     elseif sps==1 || sps==2
+% %                         % 应用规则3：当存在负峰，除非第一的是正并且大于第二的两倍，否则以负为准。
+% %                         [atp,idx]=sort(abs(temp),'descend');
+% %                         if ps(idx(1))==1 && atp(1)>=atp(2)*onetwoRatio
+% %                             seleidx=idx(1);
+% %                         else                            
+% %                             I=(ps==-1); idx=idx(I);
+% %                             seleidx=idx(1);
+% %                         end
+% %                     else % sps==3 应用规则4：当有多个的负峰
+% %                         [~,seleidx]=min(temp);
+% %                     end
+%                     %e/N
+%                 end                    
             else  % cplxpn==2
                 [~,seleidx]=max(abs(temp));
             end
@@ -347,7 +344,7 @@ end
 %%% Apply accurate localization of peak  - by spline modeling  <<< 施工中
 % * 这里不需要考虑两个峰很接近的情况，通过限制searchInt的方法保证。
 if bAccuPeak
-    ASD=SD;    
+    ASD=SD;
     % 1/N
     xpos=-apSearchIntH:apSearchIntH;
     xx=linspace(-apSearchIntH,apSearchIntH, apSearchIntH*10);

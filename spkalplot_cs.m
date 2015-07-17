@@ -1,4 +1,4 @@
-% trying prove the advantage of using CS on sorting.
+% A=spkalplot_cs(X,seq,seqMark,seqCS,SD,chID,CL,elecLabel)
 function varargout=spkalplot_cs(X,seq,seqMark,seqCS,SD,chID,CL,elecLabel)
 % <<<< the signal is not aligned to mark but to their own signals.
 srate=20000;
@@ -10,16 +10,11 @@ pathLayoutOpt=1;
 % Proc
 seqAmt=length(seq);
 seqlen=cellstat(seq,'length');
-% Union of channels used in all seqs
-chColle=[];
-for seqi=1:seqAmt
-    chColle=union(chColle,seq{seqi});
-end
-% Max number of channels used.
-chMax=max(seqlen);
+chMax=max(seqlen);% max number of channels used.
 
 %%%
 AD=cell(seqAmt,1);
+seqcount=cell(seqAmt,1);
 for seqi=1:seqAmt
     tsd=cell(seqlen(seqi),1);
     % Use the marker spikes to align all channels.    
@@ -29,27 +24,26 @@ for seqi=1:seqAmt
     for k=1:seqlen(seqi)
         tsd{k}=tp;
     end
-%     % Use separate alignment.
-%     for k=1:seqlen(seqi)
-%         tsd{k}=SD{seq{seqi}(k)}(seqCS{seqi}{k});
-%     end
     AD{seqi}=spike_align(X(:,chID(seq{seqi})),tsd,srate,'window',[-1,1]);
+    seqcount{seqi}=cellstat(seqCS{seqi},'sum');
 end
 alignlen=size(AD{1}{1},1);
 
 %%% Initialize GUI controls
 % * location start from left bottom of page
 vpos=0;
+hpos=20;
 Fig=figure('Position',[100 10 1000 900]);%,'ResizeFcn',@resizegui); 
-HpreB=uicontrol('Style','pushbutton','String','Up','Position',[50,vpos,50,25],'Callback',@PreButton_CB);
-HpageEdit=uicontrol('Style','edit','Position',[110,vpos,40,25],'Callback',@PageEdit_CB);
-HnextB=uicontrol('Style','pushbutton','String','Down','Position',[160,vpos,50,25],'Callback',@NextButton_CB);
-HpreseqB=uicontrol('Style','pushbutton','String','<--','Position',[240,vpos,50,25],'Callback',@PreSeqButton_CB);
-HnextseqB=uicontrol('Style','pushbutton','String','-->','Position',[300,vpos,50,25],'Callback',@NextSeqButton_CB);
-HselectEdit=uicontrol('Style','edit','Position',[400,vpos,100,25],'Callback',@SelectEdit_CB);
-HeqchCheck=uicontrol('Style','checkbox','String','same order','Position',[550,vpos,20,20],'Callback',@OrderCk_CB);
-% HcurvePop=uicontrol('Style','popup','String',{'samples','mean'},'Position',[220,vpos,100,25],...
-%     'Callback',@CurvePop_CB);
+HpreB=uicontrol('Style','pushbutton','String','Up','Position',[hpos,vpos,50,25],'Callback',@PreButton_CB);
+HpageEdit=uicontrol('Style','edit','Position',[hpos+50,vpos,30,25],'Callback',@PageEdit_CB);
+HnextB=uicontrol('Style','pushbutton','String','Down','Position',[hpos+80,vpos,50,25],'Callback',@NextButton_CB);
+HpreseqB=uicontrol('Style','pushbutton','String','<--','Position',[hpos+140,vpos,50,25],'Callback',@PreSeqButton_CB);
+HnextseqB=uicontrol('Style','pushbutton','String','-->','Position',[hpos+190,vpos,50,25],'Callback',@NextSeqButton_CB);
+HselectEdit=uicontrol('Style','edit','Position',[hpos+250,vpos,100,25],'Callback',@SelectEdit_CB);
+HeqchCheck=uicontrol('Style','checkbox','String','same order','Position',[hpos+360,vpos,100,20],'Callback',@OrderCk_CB);
+% HcurvePop=uicontrol('Style','popup','String',{'samples','mean'},'Position',[hpos+470,vpos,100,25],'Callback',@CurvePop_CB);
+HtextDisp=uicontrol('Style','text','Position',[hpos+470,vpos,200,25]);
+
 
 % Control status.
 flagEqChOrder=false;
@@ -60,7 +54,13 @@ chAmt=chMax;
 pgAmt=[ceil(seqAmt/pagemaxseq),ceil(chAmt/pagemaxch)]; %[hor, ver]
 
 % Draw 1st page
-dispSeqAmt=seqAmt;
+% Union of channels used in all seqs
+chColle=[];
+for k=1:seqAmt
+    chColle=union(chColle,seq{k});
+end
+
+selectSeqAmt=seqAmt;
 selectSeqI=(1:seqAmt);
 pgi=[1,1]; % seq,ch
 drawpage(pgi);
@@ -134,8 +134,14 @@ end
             selectSeqI=str2num(tp);
         end
         % number of pages.
-        dispSeqAmt=length(selectSeqI);
-        pgAmt(1)=ceil(dispSeqAmt/pagemaxseq); 
+        selectSeqAmt=length(selectSeqI);
+        % Union of channels used in all seqs
+        chColle=[];
+        for k=1:selectSeqAmt
+            chColle=union(chColle,seq{selectSeqI(k)});
+        end
+
+        pgAmt(1)=ceil(selectSeqAmt/pagemaxseq); 
         pgi=[1,1];
         drawpage(pgi);
     end
@@ -157,13 +163,14 @@ end
 
 %%%
     function drawpage(pgi)
-        set(Fig,'Name',sprintf('%d seqs %d channels, page%d-%d',dispSeqAmt,chAmt,pgi(1),pgi(2)));
+        set(Fig,'Name',sprintf('%d seqs %d channels, page%d-%d',selectSeqAmt,chAmt,pgi(1),pgi(2)));
         set(HpageEdit,'String',pgi(2));
         % Clean the page
         subplot(1,1,1);
+        % label the processing
+        set(HtextDisp,'String','apply re-draw');
         
-        
-        pgseqI=(pgi(1)-1)*pagemaxseq+1:min(pgi(1)*pagemaxseq,dispSeqAmt);
+        pgseqI=(pgi(1)-1)*pagemaxseq+1:min(pgi(1)*pagemaxseq,selectSeqAmt);
         pgchI=(pgi(2)-1)*pagemaxch+1:min(pgi(2)*pagemaxch,chAmt);
         if bSameScale
             tp=[0,0];
@@ -209,18 +216,22 @@ end
                         temp=AD{seqi}{idx};
                         temp=temp-mean(mean(temp));
                         if chi==seqMark(seqi)
-                            plot(temp,'r');
-                        else
                             plot(temp,'b');
+                        else
+                            plot(temp,'k');
                         end
+                        
+                        spknum=seqcount{seqi}(idx);
+                    else
+                        spknum=0;
                     end
                     
                     if bSameScale
                         axis(axisScale);
                     end
                     axis off
-                    % chi info.
-                    title(elecLabel{chID(chColle(pgchI(rowi)))});
+                    % chi info + related spike number.
+                    title(sprintf('%s(%d)',elecLabel{chID(chi)},spknum));
                 end
                 
             else % each seq with its own time order of channels.
@@ -232,9 +243,9 @@ end
                     temp=AD{seqi}{chi};
                     temp=temp-mean(mean(temp));
                     if seq{seqi}(chi)==seqMark(seqi)
-                        plot(temp,'r');
-                    else
                         plot(temp,'b');
+                    else
+                        plot(temp,'k');
                     end
                     
                     if bSameScale
@@ -242,10 +253,11 @@ end
                     end
                     axis off
                     % chi info.
-                    title(elecLabel{chID(seq{seqi}(chi))});
+                    title(sprintf('%s(%d)',elecLabel{chID(seq{seqi}(chi))},seqcount{seqi}(chi)));
                 end
             end
         end
+        set(HtextDisp,'String','');
     end
 
 end
