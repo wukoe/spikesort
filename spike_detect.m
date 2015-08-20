@@ -1,12 +1,11 @@
 % spike detection algorithm
-%   [SD,SQ,SA]=spike_detect(X,srate,paras) 
+%   [SD,SA,SW,SQ,stat]=spike_detect(X,srate,paras) 
 % output the spike data SD (logical format{0,1} symbol), quality and
 % amplitude of spikes (SA).
-%   [SD,SQ,SA,rawSQ]=spike_detect(...), give raw SQ before filtering.
 % SQ= detection quality information {channel}logical[spikeAmt,2]
 % FALSE: normal; bit1 TRUE: too close to the previous spike; bit2 TRUE: over-threshold "plateau" too wide; 
 % 4: low amplitude?
-function [SD,SQ,SA,SW,varargout]=spike_detect(X,srate,paras)
+function [SD,SA,SW,SQ,stat]=spike_detect(X,srate,paras)
 %%%%%%%%%%%%%% Option parameter default setting (ordered according to procssing of data)
 %%% Default
 % Whether to remove the outliner
@@ -23,7 +22,7 @@ if thresMethod==1 % Basic method
     % moving threshold - above average - by folds of STD
     movThresPos=4;
 elseif thresMethod==2 % Quiroga method
-    movLen=1; % length (s) of window   <<<<<<<<<<<<%%%%%%%%%%%%%
+    movLen=1; % length (s) of window
     movThresPos=5; % folds of estimated STD % 5 also works I think
     movThresNeg=5; % 
 elseif thresMethod==3 % RMS calculation
@@ -85,6 +84,7 @@ PSD=NSD;
 
 % Get the windows for bin - detect spikes based on local time window
 [segm,sega]=cutseg([1,pntAmt],movLen);
+SSD=zeros(sega,1);
 for segi=1:sega
     binX=X(segm(segi,1):segm(segi,2));
     
@@ -159,7 +159,10 @@ for segi=1:sega
         thresRes=(binX<-movThresNeg*ssd);        
         NSD(segm(segi,1):segm(segi,2))=thresRes;
     end
+    % Save STD data
+    SSD(segi)=ssd;
 end
+stat.SSD=mean(SSD);
 
 
 %%%%%%%%%%%%%% mark the exact location of spikes
@@ -242,11 +245,7 @@ end
 SA=SA(I); SW=SW(I);
 SQ=SQ(I,:);
 
-%%% To output ORIGINAL SQ.
-if nargout==4
-    varargout{1}=SQ;
-end
-clear PSD NSD
+% clear PSD NSD
 
 
 %%%%%%%%%%%%%%%%%%%% Checking - remove potentially false-positive spikes
@@ -369,9 +368,10 @@ if bAccuPeak
     % e/N
 end
 
-%%% To write the interval information in SQ
+%%% Closing
+% To write the interval information in SQ
 D=diff(SD);
 I=(D<spikeIntervalThres);
 SQ(I,sqIntLoc)=true;
-        
+
 end

@@ -1,54 +1,53 @@
 %   [A,rmlist,O]=spike_align(X,SD,srate,varargin)
 % X could be either signal data or the handle to .mat file.
 % here SD is index form (not time format);
-%   spike_align(...'chAssign',chID) deal with when X and SD does not have
-% one-to-one correlations (like after sorting). chID is X-ch index of each
-% SD channel.
-%   spike_align(...'select',I) to using specified channel
-% in this case, X keep the original data, SD should have the same number of
-% channels as specified by I .
-%   spike_align(...'bSmooth',true/false) to smooth the edges of spikes
-%   ...'window' .. specify the window size. (default: -1 ~ 3 ms)
-% O:preww, postww, spklen
+% Options:
+% 'window',[pre,post]: specify the window size. (default: -0.8,1.1 ms)
+% 'chAssign',chID: deal with when X and SD does not have one-to-one 
+% correlations (like after sorting). chID is X-ch index of each SD channel.
+% 'smooth',true/false: to smooth the edges of spikes.
+% 'up sample',['up','down']: 
+% Output:
+% O:preww, postww, spklen, srate(in case up sampling)
 function [A,rmlist,O]=spike_align(X,SD,srate,varargin)
 %%% Default setting
 % window for spike waveform
 preww=0.8; % pre-event window width (ms)
 postww=1.1; % post-event
-
 % 是否平滑主峰两侧的其他spike造成的峰
 bSmoothOthers=false;
 presmwin=[-1,-0.5]; % pre-peak smooth curve window - 降噪作用起始点到信号终点
-% 峰值后0.5s到1s，比例从1过渡到0.1
+% * 峰值后0.5s到1s，比例从1过渡到0.1
 postsmwin=[0.5,1]; % post-peak - 信号起始点到降噪作用终点
+% Up sampling opt
+usR=10;
 
 %%% User input
-bChSelect=false;
 bNewChID=false;
+bUpSamp=false;
 if ~isempty(varargin)
     [pname,pinfo]=paramoption(varargin{:});
     % process the parameter options one by one
     for parai=1:length(pname)
         switch pname{parai}
-            case 'bSmooth'
+            case 'smooth'
                 bSmoothOthers=pinfo{parai};
             case 'window'
                 preww=-pinfo{parai}(1);
                 postww=pinfo{parai}(2);
-            case 'select'
-                seleI=pinfo{parai};
-                bChSelect=true;
             case 'chAssign'
                 chID=pinfo{parai};                
                 bNewChID=true;
-            case 'T'
-                T=pinfo{parai};
+            case 'up sample'
+                bUpSamp=true;
+                upsOpt=pinfo{parai};
             otherwise
                 error('unidentified options');
         end
     end
 end
 
+%%% Proc
 % Determine data type
 if isa(X,'matlab.io.MatFile') % 输入文件类句柄    
     dataType=1;
@@ -60,119 +59,86 @@ else
     error('invalid data type');
 end
 
-%%% Proc
 % Check new channel ID assigned (when no assign info is provided, SD and X channel number must agree).
 SDchAmt=length(SD);
-if ~bNewChID
-    if SDchAmt>XchAmt
-        error('SD and X channel number mismatch, and new chID is not assigned');
-    end
+if ~bNewChID 
+    assert(SDchAmt==XchAmt,'SD and X channel number mismatch, and new chID is not assigned');
     chID=(1:SDchAmt)';
 end
-
-% Check the seleI number and contant.
-seleAmt=length(SD);
-if bChSelect
-    if size(seleI,2)>size(seleI,1) % transpose the chI if necessary
-        seleI=seleI';
-    end
-    
-    I=(seleI<1) | (seleI>XchAmt);
-    if any(I)
-        error('invalid in chI: beyond the X range');
-    end
-    
-    if length(seleI)~=seleAmt
-        error('specified channel length not the same size as SD'); 
-    end
-end
+sAmt=cellstat(SD,'length');
 
 % 
 preww=round(preww/1000*srate);
 postww=round(postww/1000*srate);
-
-if ~bChSelect
-    seleAmt=SDchAmt;
-    seleI=1:seleAmt;    
-end
-A=cell(seleAmt,1);
-sAmt=cellstat(SD,'length');
 ptsAmt=preww+postww+1;
+if bUpSamp
+end
 
-
-%%%%%%%%%%%%%%% Spike wave aligned to obtain window of data
+%%% Spike wave aligned to obtain window of data
+A=cell(SDchAmt,1);
 rmlist=zeros(0,2);
-for chCount=1:seleAmt
-    chi=seleI(chCount);
-    if sAmt(chCount)>0
+for chi=1:SDchAmt
+    if sAmt(chi)>0
         if dataType==1
-            x=X.X(:,chID(chCount));
+            chx=X.X(:,chID(chi));
         else
-            x=X(:,chID(chCount));
+            chx=X(:,chID(chi));
         end
         
-        %%% Discard the spike too close to the edge of recording that window does not fit
+        % Discard the spike too close to the edge of recording that window does not fit
         % * only need to consider the two ends
         rlt=[];
-        for k=1:min(3,sAmt(chCount))  
-            if SD{chCount}(k)-preww<1
+        for k=1:min(3,sAmt(chi))  
+            if SD{chi}(k)-preww<1
                 rlt=[rlt; k];
             end
-            if SD{chCount}(end-k+1)+postww>pntAmt
-                rlt=[rlt; sAmt(chCount)-k+1];
+            if SD{chi}(end-k+1)+postww>pntAmt
+                rlt=[rlt; sAmt(chi)-k+1];
             end
         end
         rlt=sort(rlt,'ascend');
-        % remove possible repeated index
+        % Remove possible repeated index (in case too few spikes)
         if rlt>1
             I=find(diff(rlt)==0);
             rlt(I+1)=[];
-        end
-        
+        end        
         rla=length(rlt);
         if rla>0
-            SD{chCount}(rlt)=[];  sAmt(chCount)=sAmt(chCount)-rla;
+            SD{chi}(rlt)=[];  sAmt(chi)=sAmt(chi)-rla;
             rmlist=[rmlist; ones(rla,1)*chi,rlt];
         end
         
-        %%%
-        % Output init
-        A{chCount}=zeros(ptsAmt,sAmt(chCount));        
-        for si=1:sAmt(chCount)
-            %%% data segmentation (different methods)
-            dslow=SD{chCount}(si)-preww; dshigh=SD{chCount}(si)+postww;
+        % Data segmentation (different methods)        
+        A{chi}=zeros(ptsAmt,sAmt(chi));        
+        for si=1:sAmt(chi)
+            dslow=SD{chi}(si)-preww; dshigh=SD{chi}(si)+postww;
             
-%             % 1/N Y-align at maximum
-%             temp=X(dslow:dshigh,chi);
-%             temp=temp-X(I(si),chi);
-
-            % 2/N Y-align no change
-            temp=x(dslow:dshigh);
+            % 1/N Naive.
+            temp=chx(dslow:dshigh);
 %             temp=temp-mean(temp);
-            
-%             % 3/N XY-align at mean-crossing point
+%             temp=temp-X(I(si),chi); % make Y-axis align at peak too.
+            % 2/N XY-align at mean-crossing point
 %             temp=temp-mean(temp);
 %             temp=(temp<0);
 %             idx=find(temp(I(si)-dslow:end),1);
 %             dslow=I(si)+idx-fix(ww/2);
 %             dshigh=I(si)+idx+fix(ww/2);
-%             temp=X(dslow:dshigh,chi);
-            
-%             % 4/N XY-align
+%             temp=X(dslow:dshigh,chi);            
+            % 3/N XY-align
 %             vmax=X(I(si),chi);
 %             [vmin,idx]=min(X(I(si):I(si)+120,chi));
 %             idx=I(si)+round(idx/2);
 %             temp=X(idx-ww:idx+ww,chi);
 %             temp=temp-(vmax+vmin)/2;
+            % e/N
             
-            % save data in output            
-            A{chCount}(:,si)=temp;
+            % Save align segment.
+            A{chi}(:,si)=temp;
         end
     end
 end
 
-
-%%%%%%%%%%%% Smoothing other peaks within the window
+%%% Smoothing other peaks within the window
 % * Method: 
 % 老方法： replace (part of)original signal with its sqrt root 
 % 新方法：固定时间段内的比例系数平滑过渡。
@@ -185,7 +151,7 @@ if bSmoothOthers
     
     %%% 投影到[0,1] -> 过渡曲线系数 % 用sigmoid
     tp=(0:presmwinRawLen-1)'/(presmwinRawLen-1);
-%     % 1/N
+    % 1/N
 %     presmcoef=transition_curve(tp,'sigmoid','rise');
     % 2/N
     presmcoef=transition_curve(tp,'line','rise');
@@ -193,7 +159,7 @@ if bSmoothOthers
     presmcoef=presmcoef*0.9+0.1; % 从0-1提升到0.1-1    
     
     tp=(0:postsmwinRawLen-1)'/(postsmwinRawLen-1);
-%     % 1/N
+    % 1/N
 %     postsmcoef=transition_curve(tp,'sigmoid','fall');    
     % 2/N
     postsmcoef=transition_curve(tp,'line','fall');
@@ -231,11 +197,11 @@ if bSmoothOthers
     
     %%%
     preDlen=presmwin(2)-presmwin(1)+1; postDlen=postsmwin(2)-postsmwin(1)+1;
-    for chCount=1:seleAmt
-        if sAmt(chCount)>=1
-            D=A{chCount}(presmwin(1):presmwin(2),:);            
-            for si=1:sAmt(chCount)
-%                 % 1/N
+    for chi=1:seleAmt
+        if sAmt(chi)>=1
+            D=A{chi}(presmwin(1):presmwin(2),:);            
+            for si=1:sAmt(chi)
+                % 1/N
 %                 D(:,si)=D(:,si).*presmcoef;
                 % 2/N                
                 tr=max(abs(D(:,si))); D(:,si)=D(:,si)/tr;
@@ -245,11 +211,11 @@ if bSmoothOthers
                 D(:,si)=D(:,si)*tr;                
                 % e/N
             end            
-            A{chCount}(presmwin(1):presmwin(2),:)=D;
+            A{chi}(presmwin(1):presmwin(2),:)=D;
 
-            D=A{chCount}(postsmwin(1):postsmwin(2),:);
-            for si=1:sAmt(chCount)
-%                 % 1/N
+            D=A{chi}(postsmwin(1):postsmwin(2),:);
+            for si=1:sAmt(chi)
+                % 1/N
 %                 D(:,si)=D(:,si).*postsmcoef;
                 % 2/N
                 tr=max(abs(D(:,si))); D(:,si)=D(:,si)/tr;
@@ -259,13 +225,34 @@ if bSmoothOthers
                 D(:,si)=D(:,si)*tr;
                 % e/N
             end
-            A{chCount}(postsmwin(1):postsmwin(2),:)=D;
+            A{chi}(postsmwin(1):postsmwin(2),:)=D;
         end
     end
 end
 
-%%%%%%%%%%% Output the length of the window
-O=struct('preww',preww,'postww',postww,'spklen',ptsAmt);
+%%% Up-sampling for making accurate alignment.
+if bUpSamp
+    UA=cell(SDchAmt,1); newA=cell(SDchAmt,1);
+    for chi=1:SDchAmt
+        [UA{chi},newA{chi}]=spkUpSamp(A{chi},'center',preww+1,'up fold',usR,'realign',[]);
+    end
+    if strcmp(upsOpt,'up') % up-sampled data
+        A=UA;
+    elseif strcmp(upsOpt,'down') % down sampling of the up-sampled (shifted)
+        A=newA;
+    else
+        error('invalid option');
+    end
+end
+
+%%% Output the length of the window
+O=struct('spklen',ptsAmt);
+if bUpSamp && strcmp(upsOpt,'up')
+    O.srate=srate*usR;
+    preww=preww*usR;
+    postww=postww*usR;
+end
+O.preww=preww; O.postww=postww;
 end %main
 
 

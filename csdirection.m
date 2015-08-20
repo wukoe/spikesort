@@ -1,49 +1,51 @@
 % find direction of the propagation of sequence
-%   [r,theta]=csdirection(seq,CL)
-% Give the polar axis measure of direction.
-%   [x,y]=csdirection(seq,CL,'measure','eu') 
-% Change output to Euclidean measure.
-%   (...'seq repeat', SR) multiply the length by the repeat number SR.
-function varargout=csdirection(seq,CL,varargin)
-opt='polar';
-bUseSeqRepeat=false;
+%   [HT,PL]=csdirection(seq,CL)
+% Euclidean measure of X,Y distance of sequence (fold of grid)
+% HT= head to tail,
+% PL= each link in path.
+function [HT,varargout]=csdirection(seq,CL,varargin)
 
-if ~isempty(varargin)
-    [pname,pinfo]=paramoption(varargin{:});
-    % process the parameter options one by one
-    for parai=1:length(pname)
-        switch pname{parai}
-            case 'seq repeat'
-                bUseSeqRepeat=true;
-                seqcount=pinfo{parai};
-            case 'measure'
-                opt=pinfo{parai};
-            otherwise
-                error('unidentified options');
+% if ~isempty(varargin)
+%     [pname,pinfo]=paramoption(varargin{:});
+%     % process the parameter options one by one
+%     for parai=1:length(pname)
+%         switch pname{parai}
+%             case ''
+%             otherwise
+%                 error('unidentified options');
+%         end
+%     end
+% end
+if isnumeric(seq)
+    seq={seq};
+end
+
+seqa=length(seq);
+
+% X,Y distance of head-tail of seq path. 
+yd=zeros(seqa,1); xd=yd;
+for seqi=1:seqa
+    [r1,c1]=find(CL==seq{seqi}(1));
+    [r2,c2]=find(CL==seq{seqi}(end));
+    yd(seqi)=r2-r1; xd(seqi)=c2-c1;    
+end
+HT=[xd,yd];
+
+% X,Y distance of each link in seq path. 
+if nargout>1
+    PL=cell(seqa,1);
+    for seqi=1:seqa
+        seqlen=length(seq{seqi});
+        yd=zeros(seqlen-1,1); xd=yd;
+        for k=1:seqlen-1
+            [r1,c1]=find(CL==seq{seqi}(k));
+            [r2,c2]=find(CL==seq{seqi}(k+1));
+            yd(k)=r2-r1; xd(k)=c2-c1;
         end
+        PL{seqi}=[xd,yd];
     end
-end
-
-%%% X,Y distance of Start/End of seq path. 
-sa=length(seq);
-yd=zeros(sa,1); xd=yd;
-for si=1:sa
-    [r1,c1]=find(CL==seq{si}(1));
-    [r2,c2]=find(CL==seq{si}(end));
-    yd(si)=r2-r1; xd(si)=c2-c1;    
-end
-if bUseSeqRepeat
-    yd=yd.*seqcount; xd=xd.*seqcount;
-end
-
-%%% Output format
-if strcmp(opt,'eu')
-    varargout{1}=xd; varargout{2}=yd;
-elseif strcmp(opt,'polar')
-    varargout{1}=sqrt(xd.^2 + yd.^2);
-    varargout{2}=atan2(yd,xd);
-else
-    error('invalid opt');
+    
+    varargout{1}=PL;
 end
 
 end

@@ -5,17 +5,17 @@
 % 'auto thres'=true
 function [ST,marklb,rmlb]=spikemerge(ST,SA,info,varargin)
 % Standard to find cluster sequence.
-ext=0.001; % ! 1ms is necessary, testing shows some delay can >0.7ms.
-% optSelect=2; % way to determine the representative of the cluster
 param=struct();
+param.ext=0.001; % ! 1ms is necessary, testing shows some delay can >0.7ms.
 param.bAutoThres=true; % whether use algorithm-determined adaptive threshold for pair number.
 param.numPthr=1e-8; % for with auto threshold
-minThres=4/60*info.TimeSpan; % static threshold if chosen to use.
+param.minThres=4/60*info.TimeSpan; % static threshold if chosen to use.
 flagUserTimeSpan=false;
 bRmIntv=false; % whether remove the large "empty" segments of spike train
 % spike time difference jitter limit.
 param.DTJthr=0.15/1000;%(ms/1000) = 3 points at 20000HZ SR. <<<
 param.bCScheck=false;
+param.flagSeparateIchi=true;
 
 % User
 if ~isempty(varargin)
@@ -24,7 +24,7 @@ if ~isempty(varargin)
     for parai=1:length(pname)
         switch pname{parai}
             case 'ext'
-                ext=pinfo{parai};
+                param.ext=pinfo{parai};
             case 'time span'
                 param.timeSpan=pinfo{parai};
                 flagUserTimeSpan=true;
@@ -47,9 +47,7 @@ if ~flagUserTimeSpan
     if bRmIntv
         % First remove the large "empty" segments of spike train
         % (most typical case: the inter-burst interval)
-        for chi=1:chAmt
-            % <<<
-        end
+        % <<<
     else
         param.timeSpan=max(cellstat(ST,'max'))-min(cellstat(ST,'min'));
     end
@@ -64,11 +62,11 @@ rmlb=cell(chAmt,1); % 各个spike是否被删除
 for chi=1:chAmt
 %     cslb{chi}=zeros(sAmt(chi),1);
     marklb{chi}=zeros(sAmt(chi),1);
-    rmlb{chi}=false(sAmt(chi),1);
+    rmlb{chi}=zeros(sAmt(chi),1);
 end
-for chi=1:chAmt
+for chi=1:chAmt-1
     if ~param.bAutoThres
-        if length(ST{chi})<minThres
+        if length(ST{chi})<param.minThres
             continue
         end
     else
@@ -78,7 +76,7 @@ for chi=1:chAmt
     end
     
     %%% Find all tight-following spikes (under ext) in the channel pairs
-    [Ichi,Isd,~,foI]=cspair(ST{chi},ST(chi+1:end),ext,sAmt(chi),param); % 不需要对全体进行扫描，只需要对后面的单元进行即可。因为与前面的已经进行过了。
+    [Ichi,Isd,~,foI]=cspair(ST{chi},ST(chi+1:end),sAmt(chi),param); % 不需要对全体进行扫描，只需要对后面的单元进行即可。因为与前面的已经进行过了。
     
     % 再次，若没有任何满足条件的conduction通道，放弃这个channel(chi).
     foAmt=length(foI);
@@ -86,22 +84,26 @@ for chi=1:chAmt
         continue
     end
     
-    %%% Add spikecs_check <<<,<<<<
+    %%% Add spikecs_check
     if param.bCScheck
-        tx=X(:,chID(foI));
-        tp=any(Ichi,2);
-        tpI=false(size(Ichi));
-        for k=1:size(Ichi,2)
-            tpI(:,k)=tp;
-        end
-        [~,IR1,IR2]=spikecs_check(tx,msd(mi),info,'IW',{tpI});
-        %
-        foI=foI(IR1);        foAmt=sum(IR1);
+        twin=[-1,1];        
+        foElect=chID(foI);
+        unionIchi=any(Ichi,2);
+        
+        tsd=cell(foAmt,1);
+        for xi=1:foAmt
+            if param.flagSeparateIchi
+                tsd{xi}=SD{chi}(Ichi(:,xi));
+            else
+                tsd{xi}=SD{chi}(unionIchi);
+            end
+        end        
+        [A]=spike_align(X(:,foElect),tsd,info.srate,'window',twin);
+        
+        [checkstat,IR1]=spikecs_check(A,info);
+        % Update the number if necessary.
+        foI=foI(IR1);        foAmt=checkstat.rnum1;
         rnum=rnum(IR1);        Ichi=Ichi(:,IR1);        Isd=Isd(IR1);
-        if foAmt<=1
-            stat.fospknum{mi}=rnum;
-            continue
-        end
     end
     
     %%% Determine which to delete of each pair.
@@ -144,10 +146,10 @@ for chi=1:chAmt
             % mark the "marker" spikes
             marklb{chi}(Ichi(:,fi))=1;
             % 标记要删除的sd(fi)
-            rmlb{foI(fi)+chi}(Isd{fi})=true;
+            rmlb{foI(fi)+chi}(Isd{fi})=chi;
         else
             marklb{foI(fi)+chi}(Isd{fi})=1;
-            rmlb{chi}(Ichi(:,fi))=true;
+            rmlb{chi}(Ichi(:,fi))=foI(fi)+chi;
         end
     end
     fprintf('|');
@@ -156,8 +158,8 @@ fprintf('\n');
 
 % Delete from the spike train & label of representative identity marker
 for chi=1:chAmt
-    ST{chi}(rmlb{chi})=[];
-    marklb{chi}(rmlb{chi})=0;
+    ST{chi}(rmlb{chi}~=0)=[];
+    marklb{chi}(rmlb{chi}~=0)=0;
 end
 
 end % of main

@@ -114,7 +114,7 @@ end
 
 %%% Get aligned segment data if input is not A data.
 if dataType~=1
-    X=spike_align(X,SD,srate,'window',pww,'chAssign',chAssign);%,'select',seleI);
+    [X,rmlist]=spike_align(X,SD,srate,'window',pww,'chAssign',chAssign);%,'select',seleI);
 end
 
 %%% Ploting
@@ -161,6 +161,7 @@ drawpage(pgi);
 
 if nargout>0
     varargout{1}=X;
+    varargout{2}=rmlist;
 end
 %%%%%%%%% End of main
 

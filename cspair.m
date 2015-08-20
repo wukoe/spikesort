@@ -1,13 +1,14 @@
 % Look for the closely-intervaled spike pairs between specified channels
 % 相对当前通道（由marksd代表，化为wd的segment形式），其他所有通道的follower的出现位置。
-%   [Iw,Isd,num]=cspair(marksd,ST,ext,markSDtotal)
-%   [Iw,Isd,num,]=cspair(marksd,ST,ext,markSDtotal,param)
+%   [Iw,Isd,num,foI]=cspair(marksd,ST,markSDtotal)
+%   [Iw,Isd,num,foI]=cspair(marksd,ST,markSDtotal,param)
 % markSDtotal is the number of all spikes which marksd is in.
-function [IW,ISD,rpNum,varargout]=cspair(marksd,ST,ext,sAmtMark,param)
+function [IW,ISD,rpNum,foI]=cspair(markst,ST,sAmtMark,param)
 flagFilt=true;
+histbinwidth=0.05e-3;%0.05ms
 
 % Proc
-markAmt=length(marksd);
+markAmt=length(markst);
 cha=length(ST);
 sAmt=cellstat(ST,'length');
 if markAmt==0
@@ -16,7 +17,7 @@ if markAmt==0
 end
 
 %%%
-wd=[marksd-ext,marksd+ext];% Make into bins
+wd=[markst-param.ext,markst+param.ext];% Make into bins
 IW=false(markAmt,cha);
 ISD=cell(cha,1);
 foI=false(cha,1);% indicator of "follower" channel of marksd
@@ -30,7 +31,7 @@ for chi=1:cha
     % Number threshold.
     rpnum=Isdlen;
     if param.bAutoThres
-        [P,expectnum]=probable_rs(param.timeSpan,[sAmtMark,sAmt(chi)],ext*2,rpnum);
+        [P,expectnum]=probable_rs(param.timeSpan,[sAmtMark,sAmt(chi)],param.ext*2,rpnum);
         % * when 2ch have spike 10000&1000, expect~30; when have
         % 10000&10000, expect~300-400.
         if rpnum>expectnum && P<param.numPthr
@@ -49,35 +50,46 @@ for chi=1:cha
     end
         
         
-    %%%%%%%%%%%%%%%%% Filtering difference if required.
+    %%%%%%%%%%%%%%%%% Filtering time difference variation if required.
     % 目的：只保留最接近平均时差的spike.
     if flagFilt
         %%% Find the true mean Time difference.
         % All possible pairs of time difference.
         DT=[];
         for k=1:Isdlen
-            tp=ST{chi}(Isd(k))-marksd(BI{Isd(k)});
+            tp=ST{chi}(Isd(k))-markst(BI{Isd(k)});
             DT=[DT;tp];
         end
-        % Locate the main region of most frequent difference by histogram.
+        % Locate the most frequent dt by histogram.
         % use number in this bin to compute mean.
-        [N,tp]=hist(DT);
+        tpbin=linspace(min(DT),max(DT),10); % the bin for histogram.
+        N=hist(DT,tpbin);
         [~,idx]=max(N);
-        histbinwidth=(tp(2)-tp(1))/2;% get (half) bin width.
-        tprange=[tp(idx)-histbinwidth,tp(idx)+histbinwidth]; % most frequent's bin range.
-        I = (DT>tprange(1)) & (DT<tprange(2));% identify samples within this range.        
-        dtm=mean(DT(I));        
+        
+        tp=tpbin(2)-tpbin(1); % bin size
+        if tp>histbinwidth
+            histbinwidth=tp;
+        end
+        tprange=[tpbin(idx)-histbinwidth,tpbin(idx)+histbinwidth]; % most frequent's bin range.
+        I = (DT>tprange(1)) & (DT<tprange(2));% identify samples within this range.
+        dtm=mean(DT(I));
+        dtmo=dtm;
+
         % Recursively approaximate the "true mean", start from the center of best bin.
         maxround=2;
         for ri=1:maxround
             seleI=(abs(DT-dtm)<=param.DTJthr);
             dt=DT(seleI); 
             dtm=mean(dt); % update mean
-        end 
+        end
+        if isnan(dtm)
+            dtm=dtmo;
+%             error('problem witm dtm, check');
+        end
         
         %%% Find qualified pairs by "true mean"
         for k=1:Isdlen
-            temp=ST{chi}(Isd(k))-marksd(BI{Isd(k)});
+            temp=ST{chi}(Isd(k))-markst(BI{Isd(k)});
             temp=abs(temp-dtm);
             I=find(temp<=param.DTJthr);
             
@@ -115,7 +127,7 @@ for chi=1:cha
         rpI=find(lb.typeAmt>1);
         if ~isempty(rpI) % means there's cases of multiple spikes in one bin.
             for k=1:length(rpI)
-                temp=ST{chi}(lb.ids{rpI(k)})-marksd(BI(lb.types(rpI(k))));
+                temp=ST{chi}(lb.ids{rpI(k)})-markst(BI(lb.types(rpI(k))));
                 temp=abs(temp-dtm);
                 [~,idx]=min(temp);
                 
@@ -130,7 +142,7 @@ for chi=1:cha
         % 若依然使用原来的会使得不合格的chi依然保持true.
         rpnum=sum(BI>0);
         if param.bAutoThres
-            [P,expectnum]=probable_rs(param.timeSpan,[sAmtMark,sAmt(chi)],ext*2,rpnum);
+            [P,expectnum]=probable_rs(param.timeSpan,[sAmtMark,sAmt(chi)],param.DTJthr,rpnum);
             if rpnum<expectnum || P>param.numPthr
                 foI(chi)=false;
             end
@@ -162,6 +174,5 @@ end
 IW=IW(:,foI); ISD=ISD(foI); 
 rpNum=sum(IW);
 foI=find(foI); 
-varargout{1}=foI;
 
 end % main

@@ -5,6 +5,7 @@
 function varargout=cspathplot(opt,seqlist,stat,CL)
 % Setting
 repthr=100;
+bUseSeqRepeat=false;
 
 % Proc
 seqAmt=length(seqlist);
@@ -14,7 +15,14 @@ if strcmp(opt,'polar')
     % Get polar representation of direction and length of CS. (only
     % measures direct line between head and tail) <<<< change this to
     % pieces later.
-    [seqR,seqTheta]=csdirection(seqlist,CL,'seq repeat',stat.seqcount);
+    eudis=csdirection(seqlist,CL);
+    xd=eudis(:,1); yd=eudis(:,2);
+    % if need to use polar 
+    seqR=sqrt(xd.^2 + yd.^2);
+    seqTheta=atan2(yd,xd);
+    if bUseSeqRepeat
+        seqR=seqR.*stat.seqcount;
+    end
     
     %
     seqTheta=mod(seqTheta,pi*2);

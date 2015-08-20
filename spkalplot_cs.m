@@ -1,7 +1,7 @@
 % A=spkalplot_cs(X,seq,seqMark,seqCS,SD,chID,CL,elecLabel)
-function varargout=spkalplot_cs(X,seq,seqMark,seqCS,SD,chID,CL,elecLabel)
-% <<<< the signal is not aligned to mark but to their own signals.
-srate=20000;
+function varargout=spkalplot_cs(X,seq,seqMark,seqCS,stat,SD,chID,CL,info)
+bSeparatePair=true;
+
 pagemaxch=7;
 pagemaxseq=8;
 bSameScale=true;
@@ -16,16 +16,24 @@ chMax=max(seqlen);% max number of channels used.
 AD=cell(seqAmt,1);
 seqcount=cell(seqAmt,1);
 for seqi=1:seqAmt
-    tsd=cell(seqlen(seqi),1);
-    % Use the marker spikes to align all channels.    
-    tp=SD{seqMark(seqi)};
+    temp=SD{seqMark(seqi)};
     idx=find(seq{seqi}==seqMark(seqi));
-    tp=tp(seqCS{seqi}{idx});
-    for k=1:seqlen(seqi)
-        tsd{k}=tp;
+    
+    temp=temp(seqCS{seqi}{idx});
+    tsd=cell(seqlen(seqi),1);
+    if bSeparatePair
+        Iw=stat.IW{seqi};
+        for k=1:seqlen(seqi)
+            tsd{k}=temp(Iw(:,k));
+        end
+        seqcount{seqi}=sum(Iw);
+    else % Use the marker spikes to align all channels.
+        for k=1:seqlen(seqi)
+            tsd{k}=temp;
+        end
+        seqcount{seqi}=cellstat(seqCS{seqi},'sum');
     end
-    AD{seqi}=spike_align(X(:,chID(seq{seqi})),tsd,srate,'window',[-1,1]);
-    seqcount{seqi}=cellstat(seqCS{seqi},'sum');
+    AD{seqi}=spike_align(X(:,chID(seq{seqi})),tsd,info.srate,'window',[-2,2]);
 end
 alignlen=size(AD{1}{1},1);
 
@@ -192,12 +200,13 @@ end
             %%% seq MEA layout
             subplot(pagemaxch+1,pagemaxseq,coli);
             % Different sequence path layout options.
-            if pathLayoutOpt==0 % basic: "marker" in special color.
-                tp=zeros(120,1); tp(chID(seq{seqi}))=0.8; % the participating channels in red.
-                tp(chID(seqMark(seqi)))=0.6; % the marker use a different color.
+            if pathLayoutOpt==0 % basic: "marker" in special color, others the same.
+                tp=-ones(120,1); 
+                tp(chID(seq{seqi}))=0.2; % the participating channels in blue.
+                tp(chID(seqMark(seqi)))=0.7; % the marker use a different color.
             else % color by the sequence time.
-                tp=zeros(120,1);
-                tp(chID(seq{seqi}))=linspace(0.2,0.8,seqlen(seqi));
+                tp=-ones(120,1);
+                tp(chID(seq{seqi}))=linspace(0.1,0.9,seqlen(seqi));
                 %<<< change the color difference to match time difference later.
             end
             chlayout(tp,CL,'clim',[0,1]);
@@ -206,7 +215,7 @@ end
             title(sprintf('#%d(%dch)',seqi,seqlen(seqi)));
             
             %%% spikes of each seq.
-            if flagEqChOrder % keep same order of channels
+            if flagEqChOrder %%% Keep same order of channels
                 for rowi=1:length(pgchI)
                     subplot(pagemaxch+1,pagemaxseq,rowi*(pagemaxseq)+coli);
                     chi=chColle(pgchI(rowi));
@@ -215,10 +224,16 @@ end
                     if ~isempty(idx)
                         temp=AD{seqi}{idx};
                         temp=temp-mean(mean(temp));
+                        % Plot spikes
+                        plot(temp,'b');
+                        % Mark the "marker" with rectangle
                         if chi==seqMark(seqi)
-                            plot(temp,'b');
-                        else
-                            plot(temp,'k');
+                            if bSameScale
+                                tp=axisScale;
+                            else
+                                tp=axis();
+                            end
+                            rectangle('Position',[tp(1),tp(3),tp(2)-tp(1),tp(4)-tp(3)],'EdgeColor','r','LineWidth',3);
                         end
                         
                         spknum=seqcount{seqi}(idx);
@@ -231,10 +246,16 @@ end
                     end
                     axis off
                     % chi info + related spike number.
-                    title(sprintf('%s(%d)',elecLabel{chID(chi)},spknum));
+                    if ~isempty(idx)
+                        dt=stat.meanTime{seqi}(idx)*1000;
+                        ts=sprintf('%s(%d) %.2f',info.elecLabel{chID(chi)},spknum,dt);
+                    else
+                        ts=sprintf('%s(%d)',info.elecLabel{chID(chi)},spknum);
+                    end                    
+                    title(ts);
                 end
                 
-            else % each seq with its own time order of channels.
+            else %%% Each seq with its own time order of channels.
                 dispchI=pgchI(pgchI<=seqlen(seqi));
                 for rowi=1:length(dispchI)
                     subplot(pagemaxch+1,pagemaxseq,rowi*(pagemaxseq)+coli);
@@ -242,10 +263,16 @@ end
                     
                     temp=AD{seqi}{chi};
                     temp=temp-mean(mean(temp));
+                    % Plot spikes
+                    plot(temp,'b');
+                    % Mark the "marker" with rectangle
                     if seq{seqi}(chi)==seqMark(seqi)
-                        plot(temp,'b');
-                    else
-                        plot(temp,'k');
+                        if bSameScale
+                            tp=axisScale;
+                        else
+                            tp=axis();
+                        end
+                        rectangle('Position',[tp(1),tp(3),tp(2)-tp(1),tp(4)-tp(3)],'EdgeColor','r','LineWidth',3);
                     end
                     
                     if bSameScale
@@ -253,7 +280,8 @@ end
                     end
                     axis off
                     % chi info.
-                    title(sprintf('%s(%d)',elecLabel{chID(seq{seqi}(chi))},seqcount{seqi}(chi)));
+                    dt=stat.meanTime{seqi}(chi)*1000;
+                    title(sprintf('%s(%d) %.2f',info.elecLabel{chID(seq{seqi}(chi))},seqcount{seqi}(chi),dt));
                 end
             end
         end

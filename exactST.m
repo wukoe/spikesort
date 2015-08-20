@@ -92,12 +92,12 @@ else
             ST{chi}(k)=T(SD{chi}(k))+dt;
             newSA{chi}(k)=tp;
             
-            %         %%% for visualization in debug
-            %         cla
-            %         hold on
-            %         plot(binTime,binX);
-            %         xp=xx(idxx);
-            %         line([xp,xp],[tp-5e-9,tp+5e-9],'color','r');
+%             %%% for visualization in debug
+%             cla
+%             hold on
+%             plot(binTime,binX);
+%             xp=xx(idxx);
+%             line([xp,xp],[tp-5e-9,tp+5e-9],'color','r');
         end
     end
 end

@@ -19,53 +19,31 @@ if fileAmt==0
 end
 
 
-% ������������ڸĳ�ֱ����?mcd�ļ�����Ҫ�ˡ�
-% %%% Ignore those proceed middle files
-% % i.g., those with _f, _fl, _s, _a, _fea, _c, _fin  postfix.
-% rmlist=[];
-% for fi=1:fileAmt
-%     [~,fn,~]=fname(fileList{fi});
-%     if length(fn)>2
-%         % find the last '_' character
-%         idx=find(fn=='_');
-%         if ~isempty(idx)
-%             % all the letters from this and after
-%             s=fn(idx(end):end);
-%             temp=strcmp(s,{'_f';'_fl';'_s';'_a';'_c'});
-%             if multilogic(temp,'or')
-%                 rmlist=[rmlist,fi];
-%             end
-%         end
-%     end
-%     if length(fn)>4
-%         temp=strcmp(fn(end-3:end),{'_fea';'_fin'});
-%         if multilogic(temp,'or')
-%             rmlist=[rmlist,fi];
-%         end
-%     end
-% end
-% 
-% if ~isempty(rmlist)
-%     fileList(rmlist)=[];
-%     fileAmt=length(fileList);
-% end
+%%% waiting for the "go" command
+if bFileListWait
+    seleI=(1:fileAmt);
+    bNotDone=true;
+    while bNotDone
+        % Display file list
+        fprintf('%d files found:\n',fileAmt);
+        for fi=1:fileAmt
+            fprintf('%d: %s\n',seleI(fi),fileList{seleI(fi)});
+        end
 
-%%% Display file list
-fprintf('%d files found:\n',fileAmt);
-for fi=1:fileAmt
-    fprintf('%s\n',fileList{fi});
-end
-
-% waiting for the "go" command
-bNotDone=bFileListWait;
-while bNotDone
-    s=input('Proceed? [y/n]:','s');
-    if strcmp(s,'n')
-        bSuccess=[]; 
-        return
-    elseif strcmp(s,'y')
-        bNotDone=false;
-    % else loop again
+        % wait for user
+        s=input('Proceed? [y/n/s]:','s');
+        if strcmp(s,'n')
+            bSuccess=false; 
+            fileList=[]; fileAmt=0;
+            bNotDone=false;
+        elseif strcmp(s,'y')
+            bNotDone=false;
+        elseif strcmp(s,'s') % select file.
+            s=input('selection:','s');
+            seleI=str2num(s);
+            fileList=fileList(seleI);
+            fileAmt=length(seleI);
+        end
     end
 end
 
@@ -75,14 +53,14 @@ end
 % and ignore those files.
 
 % if matlabpool('size')==0
-%     matlabpool open 7
+%     matlabpool open 6
 % end
 
 for fi=1:fileAmt    
     fprintf('Worker%d: Now #%d - %s\n',labindex,fi,fileList{fi});
 %     try
     [~,fn,~]=fname(fileList{fi});
-    spikesort(fn,'RunStep',{'spike detect',':'});
+    spikesort(fn,'run step',{':','merge'});
         
 %     catch ME % if failed
 %         rethrow(ME);
@@ -95,8 +73,9 @@ for fi=1:fileAmt
 %         fprintf(fid,ME.message);
 %         fprintf('\n');
 %     end
+bSuccess=true;
 end
 
 % matlabpool close
-bSuccess=true;
+
 disp('All files finished!');

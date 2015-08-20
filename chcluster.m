@@ -8,7 +8,7 @@ for round=1:roundnum
     chAmt=1;
 
     % Get the new alignment data
-    AL=spike_align(X,{SD},info.srate,'window',paras.alignWin,'bSmooth',paras.bAlignSmooth); % * 用了reconSD, 就不需要'chAssign'选项了。
+    AL=spike_align(X,{SD},info.srate,'window',paras.alignWin,'up sample','down','smooth',paras.bAlignSmooth);
     AL=AL{1};
     
 %%% Splite the positive and negative spikes

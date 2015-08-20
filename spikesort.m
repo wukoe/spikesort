@@ -29,7 +29,7 @@ paras.rmChThres=5/1000; % (V)
 paras.bSaveFiltSignal=true;
 
 % Spike detect
-paras.movThres=6.5;
+paras.movThres=6.5; %<<<
 paras.bNP=true;
 paras.bPP=true;
 
@@ -160,7 +160,9 @@ disp(fnRaw);
 %%% #1 Initiate the Run status data, Parameter. 这是每次运行必须的
 % Get info. struct data.
 % * 如果要运行filt或spike detect步骤，则从原始文件中获得信息；如果是其他步骤，则查看fnS文件是否存在，若是，则从中加载现成的info
-if ~runFlag(funcNumTab.filt) && ~runFlag(funcNumTab.detect) && exist([fnS,'.mat'],'file') % load processed information from _s.mat file
+if ~runFlag(funcNumTab.filt) && exist([fnF,'.mat'],'file') % load processed information from _f.mat file
+    load(fnF,'info');
+elseif ~runFlag(funcNumTab.detect) && exist([fnS,'.mat'],'file') % load processed information from _s.mat file
     load(fnS,'info');
 else % directely from .mcd file
     info=getMCDinfo(fnRaw,bDirectMem);    
@@ -257,16 +259,18 @@ if runFlag(funcNumTab.detect)
     disp('spike detect >>>');    
     rawSD=cell(info.rawchAmt,1);
     rawSQ=rawSD; rawSA=rawSD; rawSW=rawSD;
+    sigSD=zeros(info.rawchAmt,1); %<<<
     parfor chi=1:info.rawchAmt
-        [rawSD{chi},rawSQ{chi},rawSA{chi},rawSW{chi}]=spike_detect(X(:,chi),info.srate,paras);
+        [rawSD{chi},rawSA{chi},rawSW{chi},rawSQ{chi},tp]=spike_detect(X(:,chi),info.srate,paras);
+        sigSD(chi)=tp.SSD;
         fprintf('|');
     end
     fprintf('\n');
     
-    % Save raw SD
-    outfile2.rawSD=rawSD; outfile2.rawSQ=rawSQ; outfile2.rawSA=rawSA; outfile2.rawSW=rawSW;    
-    % Save SD and information
-    outfile2.info=info;  
+    % Save raw SD and information
+    outfile2.rawSD=rawSD; outfile2.rawSA=rawSA; outfile2.rawSW=rawSW; outfile2.rawSQ=rawSQ;
+    outfile2.sigSD=sigSD;
+    outfile2.info=info;
     outfile2.paras=paras;
     % Write to disk
     save(fnS,'-struct','outfile2'); %,'-v7.3'
@@ -299,7 +303,7 @@ if runFlag(funcNumTab.align)
     chinfo.AlichAmt=sum(I);
     temp=(1:chinfo.rawchAmt)';    chinfo.AlichID=temp(I);
     
-    % Get window Spike alignment (纯用于获取窗口宽度，选最少spiked的通道即可)
+    % Get window Spike alignment (纯用于获取窗口宽度，选最少spike的通道即可)
     [~,idx]=min(sa);
     [~,~,SO]=spike_align(X(:,1),SD(idx),info.srate,'window',paras.alignWin);
     % 消除窗口无法覆盖的边缘spike，同步更新SD,SA等信息。    
@@ -402,13 +406,41 @@ if runFlag(funcNumTab.merge)
     end
     
     disp('spike merge >>>');
+%     % Get correct spike peak location by time (if necessary)
+%     [A,~,O]=spike_align(X,outfile3.NSD0,info.srate,'chAssign',chinfo.NSD0chID,'window',[-1,1]);
+%     checkstat=spikecs_check(A,info);
+%     % 由于spike数量少而stype==0的通道进行location重置。    
+%     I=(checkstat.stype==0);
+%     checkstat.ploc(I)=O.preww+1;        
+%     % Find channel whose location is changed.
+%     tloc=checkstat.ploc-(O.preww+1);
+%     tprange=(0.1/1000)*(info.srate);
+%     changeI=(abs(tloc)>=tprange);
+%     for chi=1:chinfo.NSD0chAmt
+%         if changeI(chi)
+%             temp=A{chi};
+%             I=checkstat.ploc(chi)-tprange:checkstat.ploc(chi)+tprange;
+%             I=I(I>=1);
+%             I=I(I<=O.preww+O.postww+1);
+%             temp=temp(I,:);
+%             [~,idx]=max(abs(temp));
+%             % index to start of A
+%             idx=I(idx);
+%             % distance to original position
+%             dt=idx-(O.preww+1);
+%             
+%             % Change the NSDO accordingly.
+%             outfile3.NSD0{chi}=outfile3.NSD0{chi}+dt;
+%         end
+%     end
+
     % Accurate time by up-sampling.
     [NST0,NSA0]=exactST(X,outfile3.NSD0,T,info.srate,chinfo.NSD0chID);
     % Merge function
     [~,outfile3.NSD0csmark,outfile3.NSD0csrmlb]=spikemerge(NST0,NSA0,info,'time span',info.TimeSpan);
     NSD=outfile3.NSD0;
     for chi=1:chinfo.NSD0chAmt
-        NSD{chi}(outfile3.NSD0csrmlb{chi})=[];
+        NSD{chi}(outfile3.NSD0csrmlb{chi}~=0)=[];
     end
     
     % 需要将NSD重新组合成reconSD以利于2nd clustering 或 display.
