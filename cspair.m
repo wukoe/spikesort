@@ -27,29 +27,14 @@ for chi=1:cha
     biAmt=cellstat(BI,'length');%how many bins each spike belongs to. length as ST{chi}.
     Isd=find(biAmt>0);
     Isdlen=length(Isd);
-
-    % Number threshold.
+    
+    % Number threshold.若没有满足条件的pair number，这个channel(chi)不存在相关的CS，放弃.
     rpnum=Isdlen;
-    if param.bAutoThres
-        [P,expectnum]=probable_rs(param.timeSpan,[sAmtMark,sAmt(chi)],param.ext*2,rpnum);
-        % * when 2ch have spike 10000&1000, expect~30; when have
-        % 10000&10000, expect~300-400.
-        if rpnum>expectnum && P<param.numPthr
-            % 第一个条件是为了保证这样一个事实：P足够小的原因是因为rnum位于概率分布峰值的右侧（数量大大超过随机模型下的预期），
-            % 而非相反（数量远小于预期）。
-            foI(chi)=true;
-        end
-    else
-        if rpnum>=param.minThres
-            foI(chi)=true;
-        end
-    end    
-    % 若没有满足条件的pair number，这个channel(chi)不存在相关的CS，放弃.
-    if ~foI(chi)
+    if rpnum<=3
         continue
     end
-        
-        
+    
+    
     %%%%%%%%%%%%%%%%% Filtering time difference variation if required.
     % 目的：只保留最接近平均时差的spike.
     if flagFilt
@@ -87,7 +72,7 @@ for chi=1:cha
 %             error('problem witm dtm, check');
         end
         
-        %%% Find qualified pairs by "true mean"
+        %%% Find qualified pairs with DT around "true mean"
         for k=1:Isdlen
             temp=ST{chi}(Isd(k))-markst(BI{Isd(k)});
             temp=abs(temp-dtm);
@@ -137,21 +122,6 @@ for chi=1:cha
             end
         end
         
-        %%% Check for second time whether the remaining still fullfill number limit.
-        % *这里需要把条件反过来，因为已经没有新的foI(chi)会被设为true,只有原来为true的会变成false。
-        % 若依然使用原来的会使得不合格的chi依然保持true.
-        rpnum=sum(BI>0);
-        if param.bAutoThres
-            [P,expectnum]=probable_rs(param.timeSpan,[sAmtMark,sAmt(chi)],param.DTJthr,rpnum);
-            if rpnum<expectnum || P>param.numPthr
-                foI(chi)=false;
-            end
-        else
-            if rpnum<param.minThres
-                foI(chi)=false;
-            end
-        end
-        
         %%% can also add shape consistency check here.<<<
     else
         % Transform BI from cell to vector when not filt done.
@@ -162,6 +132,31 @@ for chi=1:cha
             end
         end
         BI=temp;
+    end
+    
+    %%% Check for Number threshold.
+    % *这里需要把条件反过来，因为已经没有新的foI(chi)会被设为true,只有原来为true的会变成false。
+    % 若依然使用原来的会使得不合格的chi依然保持true.
+    rpnum=sum(BI>0);
+    if param.bAutoThres
+        % time range of "falling in" is different in different conditions.
+        if flagFilt
+            tr=param.DTJthr;
+        else
+            tr=param.ext*2;
+        end
+        [P,expectnum]=probable_rs(param.timeSpan,[sAmtMark,sAmt(chi)],tr,rpnum);
+        % * when 2ch have spike 10000&1000, expect~30; when have
+        % 10000&10000, expect~300-400.
+        if rpnum>expectnum && P<param.numPthr
+            % 第一个条件是为了保证这样一个事实：P足够小的原因是因为rnum位于概率分布峰值的右侧（数量大大超过随机模型下的预期），
+            % 而非相反（数量远小于预期）。
+            foI(chi)=true;
+        end
+    else
+        if rpnum>=param.minThres
+            foI(chi)=true;
+        end
     end
     
     % Store data in Iw and ISD.

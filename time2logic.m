@@ -1,6 +1,6 @@
 % Convert spike train from index to logical format
 %   SD=time2logic(ST,'time',T)
-%   parameter {'bin size',bs} specify size; {'bin',bm} specify bins.
+%   parameter {'bin size',bs} specify size (s); {'bin',bm} specify bins.
 function SD=time2logic(ST,varargin)
 bTime=false;
 binSize=0.01; % (s)

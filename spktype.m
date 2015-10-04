@@ -1,6 +1,6 @@
 % Analyze spike types, and detect curve peak. 
 %   [stype,ploc,pamp,ssd]=spktype(ALD)
-% A= multi align matrix.
+% A= single align matrix.
 % pamp= amplitude with polarity (non abs).
 function [stype,ploc,pamp,ssd,flagPeakLocChange]=spktype(ALD)
 mcthr=1; % Threshold (fold of STD) of mean curve for determining peaks.

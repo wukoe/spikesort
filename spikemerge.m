@@ -91,7 +91,7 @@ for chi=1:chAmt-1
         unionIchi=any(Ichi,2);
         
         tsd=cell(foAmt,1);
-        for xi=1:foAmt
+        parfor xi=1:foAmt
             if param.flagSeparateIchi
                 tsd{xi}=SD{chi}(Ichi(:,xi));
             else

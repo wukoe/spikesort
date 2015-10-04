@@ -1,4 +1,4 @@
-% A=spkalplot_cs(X,seq,seqMark,seqCS,SD,chID,CL,elecLabel)
+% A=spkalplot_cs(X,seq,seqMark,seqCS,stat,SD,chID,CL,elecLabel)
 function varargout=spkalplot_cs(X,seq,seqMark,seqCS,stat,SD,chID,CL,info)
 bSeparatePair=true;
 
