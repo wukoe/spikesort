@@ -40,13 +40,12 @@ if bFileListWait
             bNotDone=false;
         elseif strcmp(s,'s') % select file.
             s=input('selection:','s');
-            seleI=str2num(s);
-            fileList=fileList(seleI);
+            seleI=str2num(s);            
             fileAmt=length(seleI);
         end
     end
 end
-
+fileList=fileList(seleI);
 
 %%%%%%%%%%%%%% Proceed the files found
 % * in case sorting of any data is unsuccessful, using exception catching,
@@ -60,7 +59,7 @@ for fi=1:fileAmt
     fprintf('Worker%d: Now #%d - %s\n',labindex,fi,fileList{fi});
 %     try
     [~,fn,~]=fname(fileList{fi});
-    spikesort(fn,'run step',{':','merge'});
+    spikesort(fn);%,'run step',{':','detect'});
         
 %     catch ME % if failed
 %         rethrow(ME);

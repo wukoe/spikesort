@@ -1,10 +1,9 @@
 % Convert spike train from index to logical format
 %   SD=time2logic(ST,'time',T)
-%   parameter {'bin size',bs} specify size (s); {'bin',bm} specify bins.
+%   parameter {'bin size',bs} specify size (s);
 function SD=time2logic(ST,varargin)
 bTime=false;
 binSize=0.01; % (s)
-bAutoBin=true;
 
 % User input
 if ~isempty(varargin)
@@ -17,9 +16,6 @@ if ~isempty(varargin)
                 T=pinfo{parai};
             case 'bin size'
                 binSize=pinfo{parai};
-            case 'bin'
-                bAutoBin=false;
-                binm=pinfo{parai};
             otherwise
                 error('unidentified options');
         end
@@ -32,20 +28,17 @@ if bTime
     SD=idx2logic(SI,length(T));
 else
     chAmt=length(ST);
+%     ts=min(cellstat(ST,'min'));
+    te=max(cellstat(ST,'max'));
+    
     % Determine the bins
-    if bAutoBin
-        ts=min(cellstat(ST,'min'));
-        te=max(cellstat(ST,'max'));
-        binm=(ts:binSize:te)';
-        binm=[binm(1:end-1),binm(2:end)];
-    end
-    bAmt=size(binm,1);
+    bAmt=ceil(te/binSize);
 
     % Transfer SD to bin data
     SD=false(bAmt,chAmt);
     for chi=1:chAmt
-        [~,BA]=binid(ST{chi},binm);
-        SD(:,chi)=(BA>0);
+        I=ceil(ST{chi}/binSize);
+        SD(I,chi)=true;
         fprintf('|');
     end
     fprintf('\n');

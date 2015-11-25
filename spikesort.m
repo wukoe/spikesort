@@ -102,7 +102,7 @@ if sna==1
     if strcmp(runOpt{1},':') % run all steps
         runFlag(:)=true;
     else
-        runFlag(rs2pgnum(funcNumTab,runOpt{1}))=true;
+        runFlag(funcNumTab.(runOpt{1}))=true;
     end
 
 % 输入不止一项的情况下
@@ -110,14 +110,14 @@ else
     for sni=1:sna
         if strcmp(runOpt{sni},':') % 包含通配符
             if sni==1
-                runFlag(1:rs2pgnum(funcNumTab,runOpt{sni+1}))=true;
+                runFlag(1:funcNumTab.(runOpt{sni+1}))=true;
             elseif sni==sna
-                runFlag(rs2pgnum(funcNumTab,runOpt{sni-1}):rs2pgnum(funcNumTab,'final'))=true;
+                runFlag(funcNumTab.(runOpt{sni-1}):funcNumTab.final)=true;
             else
-                runFlag(rs2pgnum(funcNumTab,runOpt{sni-1}):rs2pgnum(funcNumTab,runOpt{sni+1}))=true;
+                runFlag(funcNumTab.(runOpt{sni-1}):funcNumTab.(runOpt{sni+1}))=true;
             end
         else
-            runFlag(rs2pgnum(funcNumTab,runOpt{sni}))=true;
+            runFlag(funcNumTab.(runOpt{sni}))=true;
             % * 这里标记有些重复，不过为了代码简洁，就这样了
         end
     end
@@ -443,7 +443,7 @@ if runFlag(funcNumTab.merge)
         NSD{chi}(outfile3.NSD0csrmlb{chi}~=0)=[];
     end
     
-    % 需要将NSD重新组合成reconSD以利于2nd clustering 或 display.
+    %%% 需要将NSD重新组合成reconSD以利于2nd clustering 或 display.
     reconSD0=cell(chinfo.rawchAmt,1);
     reconD0CSrmlb=cell(chinfo.rawchAmt,1);% 通过重组NSD0到reconSD0得到reconSD0数据对应的rmlb.
     for chi=1:chinfo.rawchAmt
@@ -528,93 +528,73 @@ end
 
 %%%%%%%
 if runFlag(funcNumTab.toST)
-    %%% Save the ST form of spike_detect. 
     if ~exist('X','var')
         fprintf('loading raw signal from %s\n',fnF);
         load(fnF,'X');
         load(fnF,'T');
     end
     if ~exist('outfile2','var')
-        outfile2=load(fnS);        
+        outfile2=load(fnS);
     end
     if ~exist('outfile3','var')
-        outfile3=load(fnC);        
+        outfile3=load(fnC);
     end
     info=outfile3.info;
     chinfo=outfile3.chinfo;
     
+    %%% Save the ST form of spike_detect.
     rawSDTchID=1:chinfo.rawchAmt;
     if paras.bExactST % Get Precise time by splining spike peaks.
         [rawSDT,rawSDA]=exactST(X,outfile2.rawSD,T,info.srate,rawSDTchID);
-        save(fnST,'-append','rawSDTchID','rawSDT','rawSDA');
+        save(fnST,'-append','rawSDT','rawSDA');
     else
         rawSDT=idx2time(outfile2.rawSD,T);
-        save(fnST,'-append','rawSDTchID','rawSDT');
-    end    
-    disp('detected SD converted to ST');
+        save(fnST,'-append','rawSDT');
+    end
+    disp('detected SD converted to ST');    
     
     %%% Save the ST form of spike_cluster.
     if ~exist('outfile3','var')
         outfile3=load(fnC); % loading right "info" is important.
     end    
-    
     % First delete low-activity channels
     temp=cellstat(outfile3.NSD,'length');
     thr=paras.STactThre*info.TimeSpan;
     I=(temp>thr);
     NSD=outfile3.NSD(I);
-    NSTchID=chinfo.CluchID(I);
-    STchAmt=length(NSTchID);
-    
+    NSTchID=chinfo.CluchID(I);    
     % Remaining converted to ST
     if paras.bExactST % Get Precise time by splining spike peaks.
         [NST,NSA]=exactST(X,NSD,T,info.srate,NSTchID);
     else
-        NST=idx2time(NSD,T);        
-        NSA=cell(STchAmt,1);
-        for chi=1:STchAmt
+        stAmt=length(NSTchID);
+        NST=idx2time(NSD,T);
+        NSA=cell(stAmt,1);
+        for chi=1:stAmt
             NSA{chi}=X(NSD{chi},NSTchID(chi));
         end
-    end    
+    end
     save(fnST,'-append','NST','NSTchID','info','NSA');
-    disp('sorted SD converted to ST');    
+    disp('sorted SD converted to ST');
+    
+    %%% Save reconstructed ST (after final clustering).
+    reconSD=outfile3.reconSD;
+    temp=cellstat(reconSD,'length');
+    I=(temp>thr);
+    reconSD=reconSD(I);
+    reconSTchID=rawSDTchID(I);
+    % Convert to ST.
+    if paras.bExactST
+        [reconST]=exactST(X,reconSD,T,info.srate,reconSTchID);
+    else
+        reconST=idx2time(reconSD,T);
+    end
+    save(fnST,'-append','reconST','reconSTchID');
+    disp('reconstructed SD converted to ST');
 end
 
 % Cleaning up
 % delete(sspath);
 disp('run finish, all done');
 
-end
-%%%%%%%%%%%% End of main.
-
-
-%%%%%%%%%%%%%%% Assisting
-% To identify the runFlag of run step option in string form
-function N=rs2pgnum(funcNumTab,rsstr)
-try
-    N=funcNumTab.(rsstr);
-catch ME
-    error('invalid run-stage option');
-end
-    
-% switch rsstr
-%     case 'start'
-%         N=funcNumTab.start;
-%     case 'filt'
-%         N=funcNumTab.filt;
-%     case 'detect'
-%         N=funcNumTab.spikeDetect;
-%     case 'align'
-%         N=funcNumTab.spikeAlign;
-%     case 'cluster'
-%         N=funcNumTab.cluster;
-%     case 'merge'
-%         N=funcNumTab.merge;
-%     case 'toST'
-%         N=funcNumTab.toST;
-%     case 'final'
-%         N=funcNumTab.final;
-%     otherwise
-%         error('invalid run option');
-% end
-end
+end %%%%%%% End of main.
